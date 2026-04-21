@@ -4,10 +4,11 @@ approvers:
   - harche
   - mrunalp
   - wking
+  - chmouel
 reviewers:
   - harche
   - mrunalp
   - wking
+  - chmouel
 
-# https://redhat.atlassian.net/projects/OCPBUGS
-component: "Cluster Update Lightspeed Skills"
+component: "Pipelines Lightspeed Skills"

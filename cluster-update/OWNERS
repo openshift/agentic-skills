@@ -1,12 +1,16 @@
 # See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md
 
 approvers:
+  - harche
+  - mrunalp
   - wking
   - DavidHurta
   - PratikMahajan
   - hongkailiu
   - fao89
 reviewers:
+  - harche
+  - mrunalp
   - wking
   - DavidHurta
   - PratikMahajan
