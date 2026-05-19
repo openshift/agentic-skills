@@ -18,20 +18,15 @@ To add custom verification for a new skill:
        (mounted as /app/eval-output in the container)
      - provider_name: str — which provider ran this test (e.g., "claude")
 
-The schema used by test_cases.yaml is loaded here to avoid duplication —
-test_cases.yaml is the single source of truth for the output schema.
+Schema validation (required fields, types, enums) is handled by the framework
+via jsonschema.validate() in test_eval.py before this function is called.
+This module only needs to verify runtime data that can't be expressed statically.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-
-import yaml
-
-# Load the schema from test_cases.yaml so it's defined in one place.
-_CASES = yaml.safe_load((Path(__file__).parent / "test_cases.yaml").read_text())
-SCHEMA: dict[str, Any] = _CASES[0]["schema"]
 
 
 def verify_tokens(result: dict[str, Any], eval_workspace: Path, provider_name: str) -> None:
