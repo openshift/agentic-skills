@@ -84,18 +84,21 @@ bash evals/run.sh --eval-report=evals/report.json
 
 See [`evals/skills/find-token/`](skills/find-token/) as the reference implementation.
 
-### 1. Create the skill
+### 1. Make the skill available to the eval container
 
-Add the skill as a top-level directory with a `SKILL.md` and any tools it needs:
+`run.sh` collects skills from two sources and copies them into the container workspace:
 
+1. **Top-level directories with `SKILL.md`** — auto-discovered (e.g., `find-token/`)
+2. **Symlinks under `evals/workspace/skills/`** — for skills that live outside this repo or under a subdirectory
+
+If your skill is a top-level directory in this repo with a `SKILL.md`, it works automatically. Otherwise, add a symlink:
+
+```bash
+cd evals/workspace/skills
+ln -s ../../../path/to/my-skill my-skill
 ```
-my-skill/
-├── SKILL.md              # Skill description and usage
-└── tools/
-    └── my-tool.sh        # Tool scripts (carried with the skill)
-```
 
-The `run.sh` auto-discovers top-level directories with `SKILL.md` and copies them into the container workspace.
+Commit the symlink — git tracks it. `run.sh` dereferences symlinks (`cp -rL`) when building the container workspace.
 
 ### 2. Create eval definitions
 
@@ -177,7 +180,7 @@ evals/
 │       ├── system_prompt.md
 │       └── test_cases.yaml
 └── workspace/
-    └── skills/             # Symlinks to doc skills (mounted into containers)
+    └── skills/             # Symlinks to skills not auto-discovered at top level
 ```
 
 ## Environment Variables
