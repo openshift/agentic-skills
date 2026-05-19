@@ -70,16 +70,13 @@ echo "Starting provider containers..."
 mkdir -p "$(pwd)/.eval-workspaces"
 
 # Materialize workspace once, share across providers via hardlinks.
-# Copy eval-specific skills from workspace/skills, then overlay any
-# top-level skills (dirs with SKILL.md at root, e.g. find-token/).
+# Skills are symlinked under evals/workspace/skills/ — run.sh dereferences
+# them (cp -rL) and copies the real files into the container workspace.
 SHARED_WORKSPACE=$(mktemp -d "$(pwd)/.eval-workspaces/shared-XXXXXX")
 mkdir -p "$SHARED_WORKSPACE/skills"
 if [ -d "$(pwd)/evals/workspace/skills" ]; then
     cp -rL "$(pwd)/evals/workspace/skills/"* "$SHARED_WORKSPACE/skills/"
 fi
-for skill_dir in "$(pwd)"/*/; do
-    [ -f "${skill_dir}SKILL.md" ] && cp -rL "$skill_dir" "$SHARED_WORKSPACE/skills/$(basename "$skill_dir")"
-done
 
 for i in "${!PROVIDERS[@]}"; do
     name="${PROVIDERS[$i]}"
