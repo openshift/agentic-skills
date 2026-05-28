@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import pytest
 
@@ -50,6 +51,13 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 @pytest.fixture
 def server_url(provider_name: str) -> str:
     return _parse_env_map("EVAL_SERVER_URLS")[provider_name]
+
+
+@pytest.fixture
+def eval_workspace(provider_name: str) -> Path | None:
+    workspaces = _parse_env_map("EVAL_WORKSPACES")
+    path = workspaces.get(provider_name)
+    return Path(path) if path else None
 
 
 @pytest.fixture

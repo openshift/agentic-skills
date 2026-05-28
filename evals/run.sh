@@ -69,10 +69,14 @@ echo "Starting provider containers..."
 
 mkdir -p "$(pwd)/.eval-workspaces"
 
-# Materialize workspace once, share across providers via hardlinks
+# Materialize workspace once, share across providers via hardlinks.
+# Skills are symlinked under evals/workspace/skills/ — run.sh dereferences
+# them (cp -rL) and copies the real files into the container workspace.
 SHARED_WORKSPACE=$(mktemp -d "$(pwd)/.eval-workspaces/shared-XXXXXX")
-cp -rL "$(pwd)/evals/workspace/skills" "$SHARED_WORKSPACE/skills"
-cp -rL "$(pwd)/evals/workspace/tools" "$SHARED_WORKSPACE/tools"
+mkdir -p "$SHARED_WORKSPACE/skills"
+if [ -d "$(pwd)/evals/workspace/skills" ]; then
+    cp -rL "$(pwd)/evals/workspace/skills/"* "$SHARED_WORKSPACE/skills/"
+fi
 
 for i in "${!PROVIDERS[@]}"; do
     name="${PROVIDERS[$i]}"
@@ -84,7 +88,6 @@ for i in "${!PROVIDERS[@]}"; do
     WORKDIRS+=("$workdir")
     OUTDIRS+=("$outdir")
     cp -al "$SHARED_WORKSPACE/skills" "$workdir/skills"
-    cp -al "$SHARED_WORKSPACE/tools" "$workdir/tools"
     mkdir -p "$workdir/.claude"
     ln -s ../skills "$workdir/.claude/skills"
     chmod -R 777 "$workdir" "$outdir"
