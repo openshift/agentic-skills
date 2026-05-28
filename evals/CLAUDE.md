@@ -7,11 +7,11 @@
 EVAL_PROVIDERS=claude ANTHROPIC_MODEL=claude-opus-4-6 PYTEST="python3 -m pytest -n 4" bash evals/run.sh -k "claude and not deepagents" -v
 
 # Run one skill's evals
+bash evals/run.sh -k "find-token"
 bash evals/run.sh -k "openshift-docs"
-bash evals/run.sh -k "kubernetes-docs"
 
 # Run a single test case
-bash evals/run.sh -k "ignition_spec_version"
+bash evals/run.sh -k "find_token_tool_execution"
 
 # Generate JSON report
 bash evals/run.sh --eval-report=evals/report.json
@@ -27,14 +27,19 @@ bash evals/run.sh --eval-report=evals/report.json
 - Always clean up: `podman stop -a; podman rm -fa; rm -rf .eval-workspaces`
 - Check results with: `grep -E "PASSED|FAILED|passed|failed" <output>`
 
-## Adding Test Cases
+## Adding a New Skill Eval
 
-Test cases live in `evals/skills/<skill_name>/test_cases.yaml`. Each case needs:
-- A natural-language `query`
-- A `schema` with enum-constrained fields and a `description` containing `"Use the '<skill_name>' skill to find this."`
-- An `expected` block with the correct values from the actual docs
+See `evals/skills/find-token/` as the reference — it demonstrates both verification patterns:
 
-Before adding a test case, read the relevant doc file to get the exact expected value. Use enums, booleans, and integers — never free-form text.
+1. **Static matching** (`find_token_static_fields`): `expected` with field: value pairs for deterministic outputs
+2. **Custom verification** (`find_token_tool_execution`): `expected: { _fn: verify_tokens }` with a `verify.py` function for runtime data (tool-generated tokens, live cluster queries)
+
+Each skill eval directory needs:
+- `system_prompt.md` — the system prompt for the agent
+- `test_cases.yaml` — test cases with query, schema, and expected
+- `verify.py` (optional) — custom verification functions referenced by `_fn`
+
+Use enums, booleans, and integers in schemas — never free-form text.
 
 ## Debugging Failures
 
