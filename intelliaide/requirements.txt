@@ -1,0 +1,32 @@
+# =============================================================================
+# IntelliAide Skills — Python Dependencies
+# =============================================================================
+# Vendored into /intelliaide/vendor/ at image build time via:
+#   pip install --no-cache-dir --target /intelliaide/vendor -r requirements.txt
+#
+# Vendoring is required because the sandbox pod runs scripts with its own
+# Python interpreter (from the lightspeed-agentic base image), not the UBI9
+# Python embedded in this skills image.  The vendor/ directory is added to
+# PYTHONPATH / sys.path by each skill script at startup so packages are found.
+#
+# Excludes API server / MCP server deps (fastapi, uvicorn, mcp) — those are
+# only needed for the standalone GitLab deployment, not for skills execution.
+# =============================================================================
+
+# --- HTTP client (LLM API calls) ---
+requests>=2.31.0
+
+# --- YAML parsing ---
+PyYAML>=6.0.0
+
+# --- GCP Vertex AI authentication (gcloud token exchange) ---
+google-auth>=2.20.0
+
+# --- Log template mining (Drain3 ML algorithm) ---
+drain3>=0.9.11
+
+# --- ODT keyfields document parsing ---
+odfpy>=1.4.1
+
+# --- DOCX keyfields document parsing ---
+python-docx>=1.0
