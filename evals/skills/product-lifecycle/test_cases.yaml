@@ -1,0 +1,203 @@
+# product-lifecycle skill eval test cases
+#
+# These test cases simulate real CVO proposal requests containing readiness
+# data with OLM operator lifecycle information. The agent must use the
+# product-lifecycle skill's plc_lookup.py CLI to cross-reference operators
+# against the Red Hat Product Life Cycle API.
+#
+# The queries use the exact format CVO proposals send to the agent — metadata
+# block + readiness JSON. Ground truth comes from the live PLC API.
+
+# Test 1: Full proposal request with 5 OLM operators.
+# The agent must parse the readiness JSON, extract operator package names,
+# and run olm-check against the target OCP version.
+- name: plc_proposal_olm_batch_check
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    The olm_operator_lifecycle check found 5 operators:
+    - compliance-operator v1.9.0 (channel: stable, package: compliance-operator)
+    - cluster-logging v6.5.1 (channel: stable-6.5, package: cluster-logging)
+    - devworkspace-operator v0.41.0 (channel: fast, package: devworkspace-operator)
+    - openshift-pipelines-operator-rh v1.22.0 (channel: latest, package: openshift-pipelines-operator-rh)
+    - web-terminal v1.16.0 (channel: fast, package: web-terminal)
+
+    Use the product-lifecycle skill to run an OLM operator lifecycle check
+    for ALL 5 operators against OCP 4.21. Report how many operators have
+    lifecycle data available and how many do not.
+  schema:
+    type: object
+    properties:
+      olm_check_ran:
+        type: boolean
+        description: "Whether plc_lookup.py olm-check was executed. Use the 'product-lifecycle' skill."
+      operators_checked:
+        type: integer
+        description: "Total number of operators passed to olm-check"
+      operators_with_lifecycle_data:
+        type: integer
+        description: "Number of operators that have lifecycle data in the PLC API"
+      operators_without_lifecycle_data:
+        type: integer
+        description: "Number of operators with no lifecycle data (unavailable)"
+    required: ["olm_check_ran", "operators_checked", "operators_with_lifecycle_data", "operators_without_lifecycle_data"]
+  expected:
+    olm_check_ran: true
+    operators_checked: 5
+    operators_without_lifecycle_data: 3
+
+# Test 2: Verify cluster-logging lifecycle status specifically.
+# cluster-logging v6.5 is "Full Support" and compatible with OCP 4.21.
+- name: plc_cluster_logging_supported
+  query: >
+    A cluster upgrade proposal from OCP 4.21.5 to 4.21.16 shows
+    cluster-logging v6.5.1 is installed (package: cluster-logging).
+
+    Use the product-lifecycle skill to check: is cluster-logging compatible
+    with OCP 4.21? What is its current lifecycle status?
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether cluster-logging was found in the PLC API. Use the 'product-lifecycle' skill."
+      status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
+        description: "Normalized lifecycle status of the version compatible with OCP 4.21"
+      ocp_compatible:
+        type: boolean
+        description: "Whether the product is compatible with OCP 4.21"
+    required: ["product_found", "status", "ocp_compatible"]
+  expected:
+    product_found: true
+    status: "supported"
+    ocp_compatible: true
+
+# Test 3: Verify web-terminal has no OCP 4.21-compatible version.
+# web-terminal v1.15 supports OCP 4.20, v1.16 maps to a newer OCP.
+# The PLC API does NOT list 4.21 in any web-terminal version's ocp_versions.
+- name: plc_web_terminal_compat_check
+  query: >
+    A cluster running OCP 4.21 has web-terminal v1.16.0 installed
+    (package: web-terminal).
+
+    Use the product-lifecycle skill to check if web-terminal has a
+    version that is compatible with OCP 4.21 and currently in full support.
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether web-terminal was found in the PLC API. Use the 'product-lifecycle' skill."
+      has_supported_version_for_421:
+        type: boolean
+        description: "Whether any web-terminal version is both 'supported' and compatible with OCP 4.21"
+    required: ["product_found", "has_supported_version_for_421"]
+  expected:
+    product_found: true
+    has_supported_version_for_421: false
+
+# Test 4: compliance-operator — found by product name search, v1.9 is supported.
+# Note: olm-check returns "unavailable" for this package, but products search
+# finds "compliance operator" as a product name. The agent may use either command.
+- name: plc_compliance_operator_status
+  query: >
+    During an upgrade readiness check, the compliance-operator v1.9.0 was
+    found installed (package: compliance-operator).
+
+    Use the product-lifecycle skill to check the lifecycle status of
+    compliance-operator v1.9. Is it currently supported?
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether the PLC API has lifecycle data for this operator. Use the 'product-lifecycle' skill."
+      status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown", "unavailable"]
+        description: "Normalized lifecycle status of compliance-operator v1.9"
+    required: ["product_found", "status"]
+  expected:
+    product_found: true
+    status: "supported"
+
+# Test 5: OCP platform lifecycle check — verify OCP 4.21 is supported.
+- name: plc_ocp_platform_status
+  query: >
+    Before upgrading from OCP 4.21.5 to 4.21.16, verify that the
+    target OCP version 4.21 is still in full support.
+
+    Use the product-lifecycle skill to look up "Red Hat OpenShift
+    Container Platform" and check version 4.21's lifecycle status.
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether OCP was found in the PLC API. Use the 'product-lifecycle' skill."
+      status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
+        description: "Normalized lifecycle status of OCP 4.21"
+    required: ["product_found", "status"]
+  expected:
+    product_found: true
+    status: "supported"
+
+# Test 6: Older OCP version lifecycle — OCP 4.14 is in Extended Support.
+- name: plc_ocp_old_version_extended
+  query: >
+    Use the product-lifecycle skill to check the lifecycle status
+    of Red Hat OpenShift Container Platform version 4.14.
+    Is it still in full support, or has it moved to a later phase?
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether OCP was found in the PLC API. Use the 'product-lifecycle' skill."
+      status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
+        description: "Normalized lifecycle status of OCP 4.14"
+    required: ["product_found", "status"]
+  expected:
+    product_found: true
+    status: "extended"
+
+# Test 7: Multiple operators batch check from proposal context.
+# Only test the 2 operators that HAVE lifecycle data (cluster-logging, web-terminal).
+- name: plc_batch_known_operators_only
+  query: >
+    From a proposal's readiness data, two operators need lifecycle verification:
+
+    1. cluster-logging (package: cluster-logging)
+    2. web-terminal (package: web-terminal)
+
+    Use the product-lifecycle skill to run olm-check for these 2 operators
+    against OCP 4.21. Are both products found? Is either one end-of-life?
+  schema:
+    type: object
+    properties:
+      check_completed:
+        type: boolean
+        description: "Whether plc_lookup.py olm-check ran successfully. Use the 'product-lifecycle' skill."
+      both_found:
+        type: boolean
+        description: "Whether lifecycle data was found for both operators"
+      any_eol:
+        type: boolean
+        description: "Whether any version of either operator that is compatible with OCP 4.21 is end-of-life"
+    required: ["check_completed", "both_found", "any_eol"]
+  expected:
+    check_completed: true
+    both_found: true
+    any_eol: false

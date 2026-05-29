@@ -1,0 +1,176 @@
+# update-advisor skill eval test cases
+#
+# These test cases send real CVO proposal requests to the agent and verify
+# the upgrade decision (recommend/caution/block/escalate) based on the
+# readiness data. Each case embeds a complete readiness JSON matching the
+# exact format CVO produces.
+#
+# Decision matrix (from SKILL.md):
+#   0 blockers, 0 warnings → recommend
+#   0 blockers, 1+ warnings → caution
+#   1+ blockers, any → block
+#   Unable to assess → escalate
+
+# Test 1: Healthy cluster — all checks pass, no issues.
+# Expected decision: recommend
+- name: advisor_healthy_cluster_recommend
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"","last_transition":"2026-05-28T12:06:46Z"}},"recent_history":[{"version":"4.21.5","state":"Completed","startedTime":"2026-05-28T12:06:46Z","completionTime":"2026-05-28T12:36:04Z"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"operator_conditions":{"Available":{"status":"True","reason":"AsExpected","message":"3 members available"},"Degraded":{"status":"False","reason":"AsExpected","message":"No unhealthy members"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"All is well"}},"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","proxy":{"http_proxy":"","https_proxy":"","no_proxy":""},"tls_profile":"Intermediate","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[],"summary":{"total_operators":0,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "caution", "block", "escalate"]
+        description: "The upgrade decision based on the readiness data. Use the 'cluster-update-advisor' skill's decision policy."
+      blockers_found:
+        type: integer
+        description: "Number of blocking issues found"
+      warnings_found:
+        type: integer
+        description: "Number of warning issues found"
+    required: ["decision", "blockers_found"]
+  expected:
+    decision: "recommend"
+    blockers_found: 0
+
+# Test 2: Cluster with degraded operator — warning.
+# Expected decision: caution
+- name: advisor_degraded_operator_caution
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"","last_transition":"2026-05-28T12:06:46Z"}},"recent_history":[{"version":"4.21.5","state":"Completed"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[{"name":"authentication","conditions":{"Degraded":{"status":"True","reason":"OAuthFlaky","message":"oauth pods intermittently failing"}}}],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":1,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[],"summary":{"total_operators":0,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "caution", "block", "escalate"]
+        description: "The upgrade decision. Use the 'cluster-update-advisor' skill. A degraded operator is a warning per the classification rules."
+      blockers_found:
+        type: integer
+        description: "Number of blocking issues"
+      degraded_operator_detected:
+        type: boolean
+        description: "Whether the agent identified a degraded operator in the readiness data"
+    required: ["decision", "blockers_found", "degraded_operator_detected"]
+  expected:
+    decision: "caution"
+    blockers_found: 0
+    degraded_operator_detected: true
+
+# Test 3: Cluster with API deprecation blocker — removed API with active usage.
+# Expected decision: block
+- name: advisor_api_deprecation_block
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"recent_history":[{"version":"4.21.5","state":"Completed"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.03,"blocker_apis":[{"resource":"flowschemas.v1beta3.flowcontrol.apiserver.k8s.io","removed_in_release":"4.21.16","request_count":1250}],"warning_apis":[{"resource":"cronjobs.v1beta1.batch","deprecated_in":"4.20","request_count":42}],"summary":{"blockers":1,"warnings":1,"total":2}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[],"summary":{"total_operators":0,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "caution", "block", "escalate"]
+        description: "The upgrade decision. Use the 'cluster-update-advisor' skill. A removed API with active usage is a blocker."
+      blockers_found:
+        type: integer
+        description: "Number of blocking issues"
+      api_blocker_detected:
+        type: boolean
+        description: "Whether the agent identified the removed API as a blocker"
+    required: ["decision", "blockers_found", "api_blocker_detected"]
+  expected:
+    decision: "block"
+    api_blocker_detected: true
+
+# Test 4: Cluster with etcd member down — blocker.
+# Expected decision: block
+- name: advisor_etcd_unhealthy_block
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"recent_history":[{"version":"4.21.5","state":"Completed"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":2,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":false}],"operator_conditions":{"Available":{"status":"True","reason":"AsExpected","message":"2 of 3 members available"},"Degraded":{"status":"True","reason":"MemberDown","message":"etcd-master-2 is not ready"}},"summary":{"operator_available":true,"operator_degraded":true}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[],"summary":{"total_operators":0,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "caution", "block", "escalate"]
+        description: "The upgrade decision. Use the 'cluster-update-advisor' skill. An unhealthy etcd member is a blocker."
+      etcd_issue_detected:
+        type: boolean
+        description: "Whether the agent identified the unhealthy etcd member"
+      unhealthy_member:
+        type: string
+        description: "Name of the unhealthy etcd member"
+    required: ["decision", "etcd_issue_detected"]
+  expected:
+    decision: "block"
+    etcd_issue_detected: true
+    unhealthy_member: "etcd-master-2"
+
+# Test 5: Cluster with errored readiness checks — incomplete data.
+# Expected decision: escalate
+- name: advisor_errored_checks_escalate
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"error","_error":"failed to list ClusterOperators: connection refused","_elapsed_seconds":60.0},"api_deprecations":{"_status":"error","_error":"failed to list APIRequestCounts: connection refused","_elapsed_seconds":60.0},"node_capacity":{"_status":"error","_error":"failed to list Nodes: connection refused","_elapsed_seconds":60.0},"pdb_drain":{"_status":"error","_error":"failed to list PodDisruptionBudgets: connection refused","_elapsed_seconds":60.0},"etcd_health":{"_status":"error","_error":"failed to get ClusterOperator etcd: connection refused","_elapsed_seconds":60.0},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"error","_error":"failed to list CRDs: connection refused","_elapsed_seconds":60.0},"olm_operator_lifecycle":{"_status":"error","_error":"failed to list subscriptions: connection refused","_elapsed_seconds":60.0}},"meta":{"total_checks":9,"checks_ok":2,"checks_errored":7,"elapsed_seconds":60.0}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "caution", "block", "escalate"]
+        description: "The upgrade decision. Use the 'cluster-update-advisor' skill. When most checks errored, there is insufficient data to assess."
+      checks_errored:
+        type: integer
+        description: "Number of readiness checks that errored"
+    required: ["decision", "checks_errored"]
+  expected:
+    decision: "escalate"
+    checks_errored: 7
