@@ -5,7 +5,7 @@ description: Assess OpenShift cluster update (upgrade) readiness and risk. Use w
 
 # Cluster Update Advisor
 
-## Purpose
+## 1. Purpose
 
 Assess cluster update readiness and produce a structured risk report with
 actionable prerequisites, blockers, and recommendations.
@@ -15,12 +15,12 @@ gathered by the Cluster Version Operator. Analyze this data, classify findings,
 and produce a decision with evidence. Do not re-collect cluster data — it is
 already in the request.
 
-## Inputs
+## 2. Inputs
 
 The proposal request contains:
 - Current and target version metadata
 - Channel and update path information
-- **Cluster readiness JSON** — cluster health checks with context relevant to preparing for the update
+- **Cluster readiness JSON** — pre-collected by CVO with results from 9 parallel checks
 
 The readiness JSON is embedded in the request between ` ```json ` markers under
 the "Cluster Readiness Data" heading. Parse it to begin analysis.
@@ -41,39 +41,96 @@ the "Cluster Readiness Data" heading. Parse it to begin analysis.
     "network":               { "_status": "ok", "summary": {...}, ... },
     "crd_compat":            { "_status": "ok", "summary": {...}, ... },
     "olm_operator_lifecycle": { "_status": "ok", "summary": {...}, ... }
+  },
+  "meta": {
+    "total_checks": 9,
+    "checks_ok": 9,
+    "checks_errored": 0,
+    "elapsed_seconds": 0.65
   }
 }
 ```
 
-Each check contains `_status` (`ok` or `error`) and check-specific data
-with a `summary` section for quick parsing.
+Each check contains `_status` (`ok` or `error`), `_elapsed_seconds`, and
+check-specific data with a `summary` section for quick parsing.
 
-## Evaluation
+### What the checks cover
 
-### Parse readiness data
+| Check key | What it assesses |
+|---|---|
+| `cluster_conditions` | CVO's existing conditions (Upgradeable, Progressing, RetrievedUpdates), update history, channel |
+| `operator_health` | Per-ClusterOperator breakdown (Upgradeable, Degraded, Available), MachineConfigPool status |
+| `api_deprecations` | Deprecated/removed API usage by workloads via APIRequestCount |
+| `node_capacity` | Node readiness, schedulability |
+| `pdb_drain` | PodDisruptionBudgets that could block node drains |
+| `etcd_health` | etcd pod health, member status, operator conditions |
+| `network` | Network plugin type (SDN vs OVN), TLS profile, proxy config |
+| `crd_compat` | CRD stored/served version mismatches, operator subscriptions |
+| `olm_operator_lifecycle` | Per-operator installed version, OCP compatibility, update policy, pending upgrades, channel info |
 
-Extract the JSON from the proposal request.
-Count checks with `_status` `ok` vs `error` for completeness.
+## 3. When to Investigate Further
 
-### Verify data completeness
+After analyzing the readiness JSON, use other skills to dig deeper into
+specific findings:
 
-Any check with `_status` `error` represents a gap in visibility.
-Note incomplete areas — they reduce confidence.
+- **`prometheus`** — if `etcd_health` shows degraded conditions, query
+  `etcd_disk_backend_commit_duration_seconds` for trends
+- **`openshift-docs`** — if `network` check shows SDN, read the migration
+  guide for the target version
+- **`jira`** — search Jira for bugs against the target version and known upgrade issues
+- **`product-lifecycle`** — if `olm_operator_lifecycle` data is present,
+  cross-reference installed operators with Red Hat Product Life Cycle data
+  to check support status, EOL dates, and OCP version compatibility.
+  Use `cluster-update/product-lifecycle/scripts/plc_lookup.py olm-check --ocp <target> --operators '<json>'` for batch lookups
 
-### Evaluate findings in detail
+## 4. Decision Policy
 
-If the system prompt includes organization-specific policy (thresholds, scheduling preferences, risk tolerance), apply those constraints.
-Otherwise use sensible defaults.
-Walk through each check's summary and detail data:
+### 4.1 Workflow
 
-- Compare numeric thresholds (node headroom, etcd backup age)
-- Evaluate conditional update risks against cluster state
-- Identify compounding risks (e.g., paused MCP + cert expiry)
-- Estimate update duration (~10 min/node)
+```
+Step 1: Parse readiness data
+  Extract the JSON from the proposal request. Review
+  meta.checks_ok vs meta.total_checks for completeness.
+                       │
+Step 2: Verify data completeness
+  Any check with _status "error" represents a gap in
+  visibility. Note incomplete areas — they reduce confidence.
+                       │
+Step 3: Evaluate findings
+  If the system prompt includes organization-specific policy
+  (thresholds, scheduling preferences, risk tolerance), apply
+  those constraints. Otherwise use sensible defaults.
+  Walk through each check's summary and detail data:
+  - Compare numeric thresholds (node headroom, etcd backup age)
+  - Evaluate conditional update risks against cluster state
+  - Identify compounding risks (e.g., paused MCP + cert expiry)
+  - Estimate upgrade duration (~10 min/node)
+                       │
+Step 4: Classify and decide
+  Assign each finding a severity per the classification table
+  in section 4.2. Then determine the overall assessment:
+    recommend — all checks pass within acceptable thresholds
+    caution   — findings exist but manageable with prerequisites
+    block     — findings must be resolved before upgrade
+    escalate  — insufficient data for confident assessment
+                       │
+Step 5: Investigate (as needed)
+  Use prometheus, platform-docs, redhat-support, or
+  product-lifecycle skills for deeper analysis.
+                       │
+                       ▼
+               Produce structured risk report
+```
 
-### Classify findings
+### 4.2 Blocker Classification
 
-Assign each finding a severity per the classification table.
+| Severity | Criteria | Action |
+|---|---|---|
+| **Blocker** | Upgrade will fail or cause data loss | `decision: block` |
+| **Warning** | Upgrade may cause disruption | `decision: caution` |
+| **Info** | Noteworthy but non-blocking | Include for awareness |
+
+Classification rules:
 
 | Check | Blocker if... | Warning if... |
 |---|---|---|
@@ -86,16 +143,46 @@ Assign each finding a severity per the classification table.
 | etcd health | Any member unhealthy | No recent backup (within 24h) |
 | Network plugin | SDN in use and target requires OVN (4.17+) | Using deprecated SDN (< 4.17) |
 | CRD compatibility | Stored version not served; operator maxOpenShiftVersion < target | Deprecated versions still served |
-| OLM operator lifecycle | Installed operator incompatible with target OCP; operator product EOL | Operator has pending update; operator product in Maintenance Support |
+| OLM operator lifecycle | Installed operator incompatible with target OCP; operator product EOL (via Product Life Cycle API) | Operator has pending upgrade; operator product in Maintenance Support (via Product Life Cycle API) |
 
-For other checks, treat an issue as a blocker if would cause data loss, a performance regression, or a failed update.
-Treat the issue as a warning if would cause temporary disruption or slow updates.
+### 4.3 Decision Matrix
 
-#### Investigate with other skills
+| Blockers | Warnings | Decision |
+|---|---|---|
+| 0 | 0 | `recommend` |
+| 0 | 1+ | `caution` |
+| 1+ | any | `block` |
+| Unable to assess | any | `escalate` |
 
-If additional information or context is needed to classify a finding, these skills may be useful:
+### 4.4 Output
 
-- **`openshift-docs`** — Read official OpenShift update docs for version-specific
+The output schema is enforced by the OlsAgent CR's `outputSchema` field —
+the operator handles structured output compliance via the LLM API.
+
+## 5. Failure Modes — What NOT to Do
+
+1. **Never recommend upgrading without analyzing the readiness data.** The JSON
+   in the request is the source of truth.
+
+2. **Never dismiss conditional update risks.** If the update path is conditional,
+   evaluate each risk against the cluster.
+
+3. **Never skip the API deprecation check.** Workloads using removed APIs will
+   break after upgrade.
+
+4. **Never assume etcd is healthy.** Always check member health in the readiness data.
+
+5. **Never fabricate Jira issue keys, KB article IDs, or CVE numbers.** Use the
+   `redhat-support` skill to get real data.
+
+6. **Never recommend skipping an upgrade version** unless the readiness data shows
+   that path exists.
+
+7. **Never recommend force-upgrading.** If the standard path is blocked, report it.
+
+## 6. Using Other Skills
+
+- **`openshift-docs`** — Read official OpenShift upgrade docs for version-specific
   procedures and breaking changes.
 
 - **`prometheus`** — Query cluster metrics for trend analysis (etcd latency,
@@ -104,49 +191,7 @@ If additional information or context is needed to classify a finding, these skil
 - **`jira`** — Search Red Hat Jira for bugs and known issues affecting the target version.
 
 - **`product-lifecycle`** — Query Red Hat Product Life Cycle API to check
-  support status and OCP compatibility for installed operators. Use the operator's
-  `package` name from OLM readiness data to look up entries via the `package`
-  field (exact match). Flag operators whose product version is End of life or whose
+  support status and OCP compatibility for installed operators. Use
+  `cluster-update/product-lifecycle/scripts/plc_lookup.py olm-check --ocp <target> --operators '<json>'` for batch
+  lookups. Flag operators whose product version is End of life or whose
   `openshift_compatibility` does not include the target OCP version.
-
-### Classify overall recommendation
-
-Aggregate finding classification, and and make a decision on the overall assessment:
-
-* escalate  — insufficient data for confident assessment.
-* block     — findings must be resolved before update.
-* warn — findings exist but manageable with prerequisites.
-* recommend — all checks pass within acceptable thresholds.
-
-| Blockers | Warnings | Decision |
-|---|---|---|
-| Unable to assess | any | `escalate` |
-| 1+ | any | `block` |
-| 0 | 1+ | `warn` |
-| 0 | 0 | `recommend` |
-
-### Produce a structured risk report
-
-The output schema is enforced by the OlsAgent CR's `outputSchema` field —
-the operator handles structured output compliance via the LLM API.
-
-## Failure Modes — What NOT to Do
-
-1. **Never recommend updating without analyzing the readiness data.** The JSON
-   in the request is the source of truth.
-
-2. **Never dismiss conditional update risks.** If the update path is conditional,
-   evaluate each risk against the cluster.
-
-3. **Never skip the API deprecation check.** Workloads using removed APIs will
-   break after the update.
-
-4. **Never assume etcd is healthy.** Always check member health in the readiness data.
-
-5. **Never fabricate Jira issue keys, KB article IDs, or CVE numbers.** Use the
-   `redhat-support` skill to get real data.
-
-6. **Never recommend skipping an update version** unless the readiness data shows
-   that path exists.
-
-7. **Never recommend force-updating.** If the standard path is blocked, report it.
