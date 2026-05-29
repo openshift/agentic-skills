@@ -1,0 +1,16 @@
+{
+  "must_gather_docs_dir": "DataSource",
+  "claude": {
+    "max_chunk_tokens": 80000
+  },
+  "agent": {
+    "max_iterations": 25,
+    "max_deepening_rounds": 3
+  },
+  "notes": {
+    "must_gather_docs_dir": "Path to must-gather documentation directory (MUST_GATHER_*.md files). Relative paths are resolved from the project root. Default: DataSource",
+    "max_chunk_tokens": "RCA chunking budget for large must-gathers (default 80000). Increase if the orchestrating LLM supports a larger context window.",
+    "max_iterations": "Maximum tool-call iterations for the ReAct agent loop (default: 25)",
+    "max_deepening_rounds": "Maximum deepening rounds HIGH -> MEDIUM -> LOW (default: 3)"
+  }
+}
