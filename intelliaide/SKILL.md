@@ -1,3 +1,8 @@
+---
+name: intelliaide
+description: Deep troubleshooting and root cause analysis for OpenShift clusters using must-gather archives. Use when the user wants a thorough investigation, deep analysis, or RCA of any cluster issue and has a must-gather available.
+---
+
 # IntelliAide RCA Skills
 
 You are the orchestrator of the IntelliAide root-cause analysis pipeline for OpenShift clusters.
@@ -12,13 +17,12 @@ formatting, and file I/O.  No script makes an independent LLM call.
 
 ## When to use IntelliAide
 
-Use IntelliAide whenever the task involves any of the following:
+Use IntelliAide whenever the user wants any of the following:
 
-- Root cause analysis (RCA) of a cluster issue
-- Investigating why pods are failing, crashing, or not ready
-- Analysing degraded cluster components (etcd, API server, networking, storage, etc.)
-- Processing AlertManager alerts, ACS findings, or user-reported problems
-- Generating a structured remediation report
+- Deep troubleshooting of a cluster issue using a must-gather archive
+- Root cause analysis (RCA) or structured diagnosis of any cluster problem
+- Thorough investigation where a quick inspection is not sufficient
+- A detailed remediation report with prioritised findings and recommendations
 
 ---
 
@@ -42,7 +46,7 @@ oc annotate proposal "$_PROPOSAL" -n "$_NS" \
 
 Use these messages at each step:
 
-- Before Step 1: `"IntelliAide: waiting for must-gather data — copy now with oc cp"`
+- Before Step 1: `"IntelliAide: validating must-gather data at /data/input (PVC)"`
 - After Step 1:  `"IntelliAide: must-gather ready — preparing file selection"`
 - After Step 2a: `"IntelliAide: file selection prompt ready — selecting files"`
 - After Step 2b: `"IntelliAide: file selection complete (high=N, medium=N, low=N) — running ML analysis"`
@@ -62,14 +66,15 @@ If `oc annotate` fails, ignore it and continue — it is non-critical.
 Work through the steps below **in order**.  After each command, parse the JSON line printed to
 stdout and decide whether to continue.
 
-### Step 1 — Wait for must-gather data (oc cp)
+### Step 1 — Validate the pre-populated must-gather PVC
 
 ```
 python /app/skills/intelliaide/extract_cluster.py --query "<problem statement>"
 ```
 
-The script sleeps for the configured wait period so the user can copy must-gather data into the
-sandbox pod with `oc cp`, then does a single readiness check.
+The script immediately validates the must-gather data mounted from the PVC at `/data/input`.
+The PVC must be pre-populated with diagnostic data before the Proposal is created — the operator
+mounts it read-only into the sandbox pod automatically. No manual `oc cp` is required.
 
 Capture `job_dir` and `cluster_dir` from the output JSON.  If `success=false`, **stop
 immediately** and return the following error JSON — do not proceed to Step 2:
