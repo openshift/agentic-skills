@@ -1,0 +1,71 @@
+# Organization-specific policy configuration for ACS Image Scanner.
+# This file is loaded by the runtime alongside SKILL.md.
+# Edit this file for environment-specific settings — do not put these in SKILL.md.
+
+# Registries the organization trusts. Images from other registries
+# require explicit escalation.
+approved_registries:
+  - registry.access.redhat.com
+  - registry.redhat.io
+  - quay.io/redhat-prod
+
+# Severity thresholds
+severity:
+  # Minimum CVSS score to act on. CVEs below this are logged but not remediated.
+  min_cvss_to_act: 4.0
+  # CVSS score at or above which auto-approval is never granted.
+  critical_cvss_threshold: 9.0
+
+# Auto-approval rules
+auto_approve:
+  # Z-stream (patch) upgrades within the same stream can be auto-approved.
+  z_stream_upgrades: true
+  # Minor stream upgrades require human review.
+  minor_stream_upgrades: false
+  # Image replacements (e.g., Docker Hub → UBI) always require human review.
+  image_replacements: false
+  # Maximum number of new CVEs the recommended image may introduce
+  # while still qualifying for auto-approval.
+  max_new_cves_introduced: 0
+
+# Image policy
+images:
+  # Require digest pinning in all recommendations.
+  require_digest_pinning: true
+  # Require image signatures. If false, unsigned images produce a warning
+  # but are not disqualified.
+  require_signatures: false
+  # Prefer UBI9 over UBI8 unless workload requires RHEL 8.
+  prefer_ubi9: true
+  # Maximum age (days) of a recommended image build. Older builds are flagged.
+  max_build_age_days: 90
+
+# Lifecycle policy
+lifecycle:
+  # Allowed support phases for recommended images.
+  allowed_phases:
+    - Full Support
+    - Maintenance Support
+  # Warn (but don't disqualify) for these phases.
+  warn_phases:
+    - Extended Life Support
+  # Never recommend images in these phases.
+  blocked_phases:
+    - End of Life
+
+# Namespace restrictions
+namespaces:
+  # Namespaces where automatic patching is allowed.
+  # Empty list means all namespaces require manual approval.
+  auto_patch_allowed: []
+  # Namespaces where only advisory (no-execute) mode is permitted.
+  advisory_only: []
+
+# Escalation overrides
+escalation:
+  # Always escalate if confidence is below this threshold.
+  min_confidence: "medium"
+  # Always escalate base-image family changes (e.g., Debian → RHEL).
+  on_base_image_change: true
+  # Always escalate if tools produce conflicting outputs.
+  on_conflicting_tool_output: true
