@@ -1,1 +1,3 @@
 .eval-workspaces/
+deploy-vertex-e2e.sh
+setup-vertex-adc.sh
