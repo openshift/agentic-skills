@@ -1,0 +1,50 @@
+{
+  "pipeline": {
+    "use_chunk_pipeline": null,
+    "file_size_threshold_mb": 50.0
+  },
+  "chunk_settings": {
+    "chunk_size": 10000,
+    "parallel_chunks": true,
+    "chunk_workers": null,
+    "min_chunks_for_parallel": 3
+  },
+  "drain3_settings": {
+    "batch_size": 1000,
+    "similarity_threshold": 0.3,
+    "depth": 4,
+    "max_children": 100
+  },
+  "output": {
+    "output_dir": null,
+    "levels_to_process": ["E", "W", "I", "UNKNOWN"]
+  },
+  "output_flags": {
+    "include_rare_errors": true,
+    "include_highfreq_errors": true,
+    "include_warnings": true,
+    "include_information": true,
+    "include_unknown": true,
+    "include_config_changes": true
+  },
+  "frequency_settings": {
+    "high_freq_cumulative_threshold": 0.80,
+    "enable_tiered_error_output": true,
+    "rare_absolute_max_size": null,
+    "rare_max_lines_per_template": 15
+  },
+  "preprocessing": {
+    "remove_timestamps": true,
+    "timestamp_patterns": [
+      "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z?\\s*",
+      "^\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\s*",
+      "^([IWE])\\d{4}\\s+\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\s*",
+      "^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{1,2}\\s+\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\s+\\S+\\s+",
+      "\\b\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\b"
+    ]
+  },
+  "logging": {
+    "verbose": true,
+    "print_progress": true
+  }
+}
