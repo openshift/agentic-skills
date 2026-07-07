@@ -5,7 +5,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import plc_lookup
@@ -304,7 +304,6 @@ class TestCmdOlmCheck(unittest.TestCase):
     def test_fallback_search(self):
         """When OpenShift batch misses a package, fallback to direct search."""
         call_count = [0]
-        original_search = plc_lookup.api_search
 
         def mock_search(name):
             call_count[0] += 1
