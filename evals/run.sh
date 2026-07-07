@@ -21,7 +21,10 @@ fi
 GCLOUD_ADC="${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/.config/gcloud/application_default_credentials.json}"
 GCLOUD_MOUNT_ARGS=()
 if [ -f "$GCLOUD_ADC" ]; then
-    GCLOUD_MOUNT_ARGS=(-v "$GCLOUD_ADC:/tmp/gcloud-adc.json:ro,Z" -e "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-adc.json")
+    GCLOUD_ADC_TMP=$(mktemp /tmp/gcloud-adc.XXXXXX)
+    cp "$GCLOUD_ADC" "$GCLOUD_ADC_TMP"
+    chmod 600 "$GCLOUD_ADC_TMP"
+    GCLOUD_MOUNT_ARGS=(-v "$GCLOUD_ADC_TMP:/tmp/gcloud-adc.json:ro,Z,U" -e "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-adc.json")
 fi
 
 # Available providers: claude gemini openai deepagents-claude deepagents-gemini deepagents-openai
@@ -42,6 +45,7 @@ cleanup() {
     for d in "${WORKDIRS[@]}"; do
         rm -rf "$d" 2>/dev/null || true
     done
+    [ -n "${GCLOUD_ADC_TMP:-}" ] && rm -f "$GCLOUD_ADC_TMP" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -128,7 +132,7 @@ for i in "${!PROVIDERS[@]}"; do
     port=$((BASE_PORT + i))
     (
         for attempt in $(seq 1 "$HEALTH_TIMEOUT"); do
-            if curl -sf "http://localhost:${port}/health" > /dev/null 2>&1; then
+            if curl -sf "http://127.0.0.1:${port}/health" > /dev/null 2>&1; then
                 echo "  ${name}: ready"
                 exit 0
             fi
@@ -150,7 +154,7 @@ WORKSPACE_MAP=""
 for i in "${!PROVIDERS[@]}"; do
     name="${PROVIDERS[$i]}"
     port=$((BASE_PORT + i))
-    SERVER_URLS="${SERVER_URLS}${name}=http://localhost:${port},"
+    SERVER_URLS="${SERVER_URLS}${name}=http://127.0.0.1:${port},"
     WORKSPACE_MAP="${WORKSPACE_MAP}${name}=${OUTDIRS[$i]},"
 done
 
