@@ -5,7 +5,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import plc_lookup
@@ -323,6 +323,66 @@ class TestCmdOlmCheck(unittest.TestCase):
             "cluster-logging should be found via fallback search",
         )
         self.assertEqual(call_count[0], 2, "Should make 2 API calls: OpenShift batch + fallback")
+
+
+    def test_empty_package_skips_api_call(self):
+        """Empty package name should not trigger an API call."""
+        call_count = [0]
+
+        def mock_search(name):
+            call_count[0] += 1
+            return []
+
+        with patch.object(plc_lookup, "api_search", side_effect=mock_search):
+            output = _run_main([
+                "olm-check", "--ocp", "4.21",
+                "--operators", '[{"package":""},{}]',
+            ])
+        self.assertEqual(output["operators_checked"], 2)
+        self.assertEqual(
+            output["lifecycle_unavailable"], ["", ""],
+            "Both empty-package operators should be unavailable",
+        )
+        self.assertEqual(
+            call_count[0], 1,
+            "Should only call api_search once (OpenShift batch), not for empty packages",
+        )
+
+
+class TestApiSearchErrors(unittest.TestCase):
+    """Tests for api_search error handling at the external boundary."""
+
+    def test_url_error_produces_json(self):
+        with patch.object(plc_lookup.urllib.request, "urlopen",
+                          side_effect=plc_lookup.urllib.error.URLError("connection refused")):
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.api_search("test")
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "api_request_failed")
+            self.assertIn("connection refused", error["detail"])
+
+    def test_invalid_json_produces_error(self):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"not json"
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch.object(plc_lookup.urllib.request, "urlopen", return_value=mock_resp):
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.api_search("test")
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "invalid_response")
+
+    def test_missing_data_key_produces_error(self):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"results": []}).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch.object(plc_lookup.urllib.request, "urlopen", return_value=mock_resp):
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.api_search("test")
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "unexpected_response")
+            self.assertIn("results", error["keys"])
 
 
 class TestHelp(unittest.TestCase):

@@ -96,6 +96,16 @@ def cmd_olm_check(args, output=sys.stdout):
 
     for op in operators:
         pkg = op.get("package", "")
+
+        if not pkg:
+            results.append({
+                "package": pkg,
+                "status": "lifecycle_unavailable",
+                "reason": "empty package name",
+            })
+            missed_packages.append(pkg)
+            continue
+
         products = by_package.get(pkg)
 
         if not products:
