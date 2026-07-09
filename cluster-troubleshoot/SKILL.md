@@ -3,14 +3,16 @@ name: cluster-troubleshoot
 description: Diagnose and troubleshoot OpenShift cluster issues. Use when the user reports alerts firing, pods crashing, deployments stuck, nodes not ready, operators degraded, HTTP errors, DNS failures, or any cluster anomaly. Not for cluster setup, configuration how-tos, or writing alerting rules.
 ---
 
-# ROLE
-
-You are an expert OpenShift site-reliability engineer. You investigate cluster problems methodically: gather evidence first, then diagnose.
-
 # ENVIRONMENT
 
 - Platform: OpenShift Container Platform (OCP). Use OpenShift-specific resources (ClusterOperator, ClusterVersion, MachineConfigPool, Route, etc.) alongside standard Kubernetes ones.
-- You run `oc` commands against the live cluster.
+- You run commands against the live cluster.
+- Available CLIs: oc, kubectl, jq, wget, openssl, skopeo, python3
+- Networking diagnostics: iproute (ip, ss), bind-utils (dig, nslookup, host), net-tools (netstat, ifconfig), tcpdump, lsof
+- Process and system: procps-ng (ps, top, free), strace, findutils, file, diffutils
+- Container images: skopeo
+- General: git, less, vim, tar, gzip, unzip, diff
+- Writable directories: /home/agent, /tmp/agent-workspace. The root filesystem is read-only.
 
 # RESPONSE RULES
 
@@ -18,6 +20,7 @@ You are an expert OpenShift site-reliability engineer. You investigate cluster p
 - If multiple causes exist, list them numbered with supporting evidence.
 - If inconclusive, say so and suggest what additional access or data would help narrow it down. Never fabricate information.
 - In diagnosis mode, stay focused on the reported issue — don't surface unrelated errors.
+- CRITICAL: The output remediation plan and options MUST address only the root cause of the specific alert or issue being analyzed. Never include secondary issues, unrelated findings, or general recommendations discovered during investigation.
 - No URLs unless from command output or provided context.
 
 # INVESTIGATION PROTOCOL
@@ -62,25 +65,25 @@ THANOS_URL=$(oc get route thanos-querier -n openshift-monitoring -o jsonpath='{.
 **Instant query** (current value):
 ```bash
 wget -qO- --no-check-certificate --header="Authorization: Bearer $TOKEN" \
-  "https://${THANOS_URL}/api/v1/query?query=$(python3 -c 'import urllib.parse; print(urllib.parse.quote("<promql>"))')" | jq .
+  "https://$THANOS_URL/api/v1/query?query=$(python3 -c 'import urllib.parse; print(urllib.parse.quote("<promql>"))')" | jq .
 ```
 
 **Range query** (time series, e.g. last hour with 60s resolution):
 ```bash
 wget -qO- --no-check-certificate --header="Authorization: Bearer $TOKEN" \
-  "https://${THANOS_URL}/api/v1/query_range?query=$(python3 -c 'import urllib.parse; print(urllib.parse.quote("<promql>"))')&start=$(date -d '1 hour ago' -u +%Y-%m-%dT%H:%M:%SZ)&end=$(date -u +%Y-%m-%dT%H:%M:%SZ)&step=60s" | jq .
+  "https://$THANOS_URL/api/v1/query_range?query=$(python3 -c 'import urllib.parse; print(urllib.parse.quote("<promql>"))')&start=$(date -d '1 hour ago' -u +%Y-%m-%dT%H:%M:%SZ)&end=$(date -u +%Y-%m-%dT%H:%M:%SZ)&step=60s" | jq .
 ```
 
 **Discover available metrics** (never guess metric names):
 ```bash
 wget -qO- --no-check-certificate --header="Authorization: Bearer $TOKEN" \
-  "https://${THANOS_URL}/api/v1/label/__name__/values" | jq '.data[]' | grep -i '<pattern>'
+  "https://$THANOS_URL/api/v1/label/__name__/values" | jq '.data[]' | grep -i '<pattern>'
 ```
 
 **Get firing alerts:**
 ```bash
 wget -qO- --no-check-certificate --header="Authorization: Bearer $TOKEN" \
-  "https://${THANOS_URL}/api/v1/alerts" | jq '.data.alerts[] | select(.state=="firing")'
+  "https://$THANOS_URL/api/v1/alerts" | jq '.data.alerts[] | select(.state=="firing")'
 ```
 
 **Workflow:** Start by checking firing alerts — their labels contain exact identifiers (namespace, pod, node) that make follow-up queries precise. Always discover metric names before querying. Use instant queries for current state, range queries for trends. If a metric doesn't exist, tell the user — do not fabricate PromQL.
