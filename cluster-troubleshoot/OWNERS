@@ -3,14 +3,14 @@
 approvers:
   - falox
   - tremes
+  - rioloc
+  - shwetaap
   - iNecas
-  - harche
-  - mrunalp
 reviewers:
   - falox
   - tremes
+  - rioloc
+  - shwetaap
   - iNecas
-  - harche
-  - mrunalp
 
 component: "Cluster Troubleshooting Lightspeed Skills"
