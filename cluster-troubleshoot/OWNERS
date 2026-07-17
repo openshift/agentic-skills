@@ -1,0 +1,16 @@
+# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md
+
+approvers:
+  - falox
+  - tremes
+  - rioloc
+  - shwetaap
+  - iNecas
+reviewers:
+  - falox
+  - tremes
+  - rioloc
+  - shwetaap
+  - iNecas
+
+component: "Cluster Troubleshooting Lightspeed Skills"
