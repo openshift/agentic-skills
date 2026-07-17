@@ -1,0 +1,167 @@
+# cluster-troubleshoot skill eval test cases
+#
+# Static tests verify tool-selection knowledge — the agent must pick the
+# correct diagnostic script for a given scenario.
+#
+# Mock-based tests embed canned tool output in the query and verify the
+# agent interprets the diagnostic data correctly.
+
+# --- Static tool-selection tests ---
+
+- name: tool_for_crashing_pod
+  query: "A pod named web-frontend-7b9d4 is crash-looping in namespace production. Which cluster-troubleshoot diagnostic script should I run first to inspect its status, conditions, and events?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["diagnose-pod.sh", "diagnose-workload.sh", "diagnose-node.sh", "get-events.sh", "get-firing-alerts.sh"]
+        description: "The diagnostic script from the cluster-troubleshoot skill to run first. Pick the most specific one."
+    required: [script]
+  expected:
+    script: "diagnose-pod.sh"
+
+- name: tool_for_firing_alert
+  query: "An alert called KubePodCrashLooping is firing. Which cluster-troubleshoot diagnostic script fetches the alert's PromQL rule definition, thresholds, and annotations?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["query-alert.sh", "fetch-alert-rule.sh", "get-firing-alerts.sh", "prometheus-query.sh", "discover-metrics.sh"]
+        description: "The script that retrieves the alert rule definition. Use the 'cluster-troubleshoot' skill to find this."
+    required: [script]
+  expected:
+    script: "fetch-alert-rule.sh"
+
+- name: tool_for_node_issue
+  query: "A node is showing NotReady status. Which cluster-troubleshoot diagnostic script provides node conditions, capacity, taints, and kubelet info?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["diagnose-node.sh", "diagnose-pod.sh", "diagnose-operator.sh", "get-events.sh", "check-recent-changes.sh"]
+        description: "The script for node diagnostics. Use the 'cluster-troubleshoot' skill to find this."
+    required: [script]
+  expected:
+    script: "diagnose-node.sh"
+
+- name: tool_for_operator_degraded
+  query: "The authentication ClusterOperator is showing Degraded=True. Which cluster-troubleshoot diagnostic script checks ClusterOperator health, conditions, and versions?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["diagnose-operator.sh", "diagnose-workload.sh", "diagnose-pod.sh", "get-firing-alerts.sh", "check-recent-changes.sh"]
+        description: "The script for ClusterOperator diagnostics. Use the 'cluster-troubleshoot' skill to find this."
+    required: [script]
+  expected:
+    script: "diagnose-operator.sh"
+
+- name: tool_for_prometheus_setup
+  query: "Before running any Prometheus queries with the cluster-troubleshoot skill, what script must be run first to configure access credentials?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["prometheus-setup.sh", "prometheus-query.sh", "discover-metrics.sh", "get-firing-alerts.sh"]
+        description: "The script that sets up Prometheus credentials. Use the 'cluster-troubleshoot' skill to find this."
+    required: [script]
+  expected:
+    script: "prometheus-setup.sh"
+
+- name: tool_for_recent_changes
+  query: "Something changed recently and broke our namespace. Which cluster-troubleshoot diagnostic script detects recent rollouts, image pulls, and scaling events?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["check-recent-changes.sh", "get-events.sh", "diagnose-workload.sh", "get-firing-alerts.sh", "diagnose-pod.sh"]
+        description: "The script for detecting recent cluster changes. Use the 'cluster-troubleshoot' skill to find this."
+    required: [script]
+  expected:
+    script: "check-recent-changes.sh"
+
+- name: diagnose_pod_log_flag
+  query: "When using the cluster-troubleshoot skill's diagnose-pod.sh, what command-line flag do you pass to include container logs in the output?"
+  schema:
+    type: object
+    properties:
+      flag:
+        type: string
+        enum: ["--logs", "--include-logs", "-l", "--verbose", "--tail"]
+        description: "The flag for including logs. Use the 'cluster-troubleshoot' skill to find this."
+    required: [flag]
+  expected:
+    flag: "--logs"
+
+- name: first_investigation_step
+  query: "According to the cluster-troubleshoot investigation protocol, what is the very first command you must run in Step 1 before anything else?"
+  schema:
+    type: object
+    properties:
+      command:
+        type: string
+        enum:
+          - "eval $(bash tools/prometheus-setup.sh)"
+          - "bash tools/get-firing-alerts.sh"
+          - "bash tools/diagnose-pod.sh"
+          - "bash tools/get-events.sh"
+        description: "The first command in the investigation protocol. Use the 'cluster-troubleshoot' skill to find this."
+    required: [command]
+  expected:
+    command: "eval $(bash tools/prometheus-setup.sh)"
+
+# --- Mock-based diagnostic reasoning tests ---
+
+- name: interpret_pod_oomkilled
+  query: |
+    You ran diagnose-pod.sh and got this output:
+    {"pods":[{"name":"api-server-6f8b9c-xk2lm","namespace":"payments","phase":"Running","conditions":[{"type":"Ready","status":"False"},{"type":"ContainersReady","status":"False"}],"container_statuses":[{"name":"api","state":{"waiting":{"reason":"CrashLoopBackOff"}},"lastState":{"terminated":{"reason":"OOMKilled","exitCode":137,"finishedAt":"2026-07-17T08:15:00Z"}},"restartCount":12,"ready":false}],"node_name":"worker-2","restart_count":12,"events":[{"type":"Warning","reason":"BackOff","message":"Back-off restarting failed container api in pod api-server-6f8b9c-xk2lm_payments"}]}]}
+    What is the root cause of this pod's failure?
+  schema:
+    type: object
+    properties:
+      root_cause:
+        type: string
+        enum: ["OOMKilled", "CrashLoopBackOff", "ImagePullBackOff", "Evicted", "NodeNotReady"]
+        description: "The underlying cause of the container's termination. Use the 'cluster-troubleshoot' skill to diagnose."
+      pod_name:
+        type: string
+        description: "The name of the affected pod"
+      restart_count:
+        type: integer
+        description: "Number of container restarts"
+    required: [root_cause, pod_name, restart_count]
+  expected:
+    root_cause: "OOMKilled"
+    pod_name: "api-server-6f8b9c-xk2lm"
+    restart_count: 12
+
+- name: interpret_firing_alert
+  query: |
+    You ran query-alert.sh KubeDeploymentReplicasMismatch and got:
+    {"alert_name":"KubeDeploymentReplicasMismatch","firing":true,"instance_count":2,"instances":[{"metric":{"__name__":"ALERTS","alertname":"KubeDeploymentReplicasMismatch","namespace":"checkout","deployment":"payment-gateway","severity":"warning"},"value":[1721203200,"1"]},{"metric":{"__name__":"ALERTS","alertname":"KubeDeploymentReplicasMismatch","namespace":"checkout","deployment":"order-service","severity":"warning"},"value":[1721203200,"1"]}]}
+    Based on this output: is the alert firing, how many instances are affected, and in which namespace?
+  schema:
+    type: object
+    properties:
+      is_firing:
+        type: boolean
+        description: "Whether the alert is currently firing"
+      instance_count:
+        type: integer
+        description: "Number of firing instances"
+      namespace:
+        type: string
+        enum: ["checkout", "payments", "production", "default", "openshift-monitoring"]
+        description: "The namespace where the alert is firing"
+    required: [is_firing, instance_count, namespace]
+  expected:
+    is_firing: true
+    instance_count: 2
+    namespace: "checkout"
