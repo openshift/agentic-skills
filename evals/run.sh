@@ -24,7 +24,9 @@ if [ -f "$GCLOUD_ADC" ]; then
     GCLOUD_ADC_TMP=$(mktemp /tmp/gcloud-adc.XXXXXX)
     cp "$GCLOUD_ADC" "$GCLOUD_ADC_TMP"
     chmod 600 "$GCLOUD_ADC_TMP"
-    GCLOUD_MOUNT_ARGS=(-v "$GCLOUD_ADC_TMP:/tmp/gcloud-adc.json:ro,Z,U" -e "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-adc.json")
+    gcloud_mount_path="/tmp/gcloud-adc/GOOGLE_APPLICATION_CREDENTIALS"
+    GCLOUD_MOUNT_ARGS=(-v "$GCLOUD_ADC_TMP:$gcloud_mount_path:ro,Z,U" -e "LIGHTSPEED_LLM_CREDENTIALS_PATH=/tmp/gcloud-adc" \
+     -e "GOOGLE_APPLICATION_CREDENTIALS=$gcloud_mount_path")
 fi
 
 # Available providers: claude gemini openai deepagents-claude deepagents-gemini deepagents-openai
@@ -49,11 +51,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Map provider names to LIGHTSPEED_AGENT_PROVIDER values
+# Map provider names to LIGHTSPEED_PROVIDER values
 provider_env() {
     case "$1" in
+        claude) echo "anthropic" ;;
+        gemini) echo "vertex" ;;
         deepagents-claude|deepagents-gemini|deepagents-openai) echo "deepagents" ;;
         *) echo "$1" ;;
+    esac
+}
+
+# Map provider names to LIGHTSPEED_MODEL_PROVIDER values
+model_provider_env() {
+    case "$1" in
+        gemini) echo "google" ;;
+        *) echo "" ;;
     esac
 }
 
@@ -86,14 +98,13 @@ for i in "${!PROVIDERS[@]}"; do
     name="${PROVIDERS[$i]}"
     port=$((BASE_PORT + i))
     agent_provider=$(provider_env "$name")
+    model_provider=$(model_provider_env "$name")
     workdir=$(mktemp -d "$(pwd)/.eval-workspaces/eval-${name}-XXXXXX")
     outdir="$(pwd)/.eval-workspaces/output-${name}"
     mkdir -p "$outdir"
     WORKDIRS+=("$workdir")
     OUTDIRS+=("$outdir")
     cp -al "$SHARED_WORKSPACE/skills" "$workdir/skills"
-    mkdir -p "$workdir/.claude"
-    ln -s ../skills "$workdir/.claude/skills"
     chmod -R 777 "$workdir" "$outdir"
 
     cid=$($RUNTIME run -d --rm \
@@ -104,8 +115,11 @@ for i in "${!PROVIDERS[@]}"; do
         -e EVAL_OUTPUT_DIR="/app/eval-output" \
         -e PYTHONPATH="/app/src:/opt/app-root/lib64/python3.12/site-packages" \
         "${GCLOUD_MOUNT_ARGS[@]}" \
-        -e LIGHTSPEED_AGENT_PROVIDER="$agent_provider" \
-        -e LIGHTSPEED_SKILLS_DIR="/app/workspace" \
+        -e LIGHTSPEED_PROVIDER="$agent_provider" \
+        -e LIGHTSPEED_MODEL_PROVIDER="$model_provider" \
+        -e LIGHTSPEED_PROVIDER_PROJECT="${ANTHROPIC_VERTEX_PROJECT_ID:-}" \
+        -e LIGHTSPEED_PROVIDER_REGION="${CLOUD_ML_REGION:-}" \
+        -e LIGHTSPEED_SKILLS_DIR="/app/workspace/skills" \
         -e ANTHROPIC_API_KEY \
         -e CLAUDE_CODE_USE_VERTEX \
         -e ANTHROPIC_VERTEX_PROJECT_ID \
