@@ -109,7 +109,7 @@ def cmd_olm_check(args, output=sys.stdout):
         products = by_package.get(pkg)
 
         if not products:
-            extra = api_search(pkg)
+            extra = api_search(pkg.replace("-", " "))
             products = [p for p in extra if p.get("package") == pkg]
 
         if not products:
