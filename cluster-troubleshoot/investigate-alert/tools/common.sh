@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared functions for cluster-troubleshoot tools.
+# Shared functions for investigate-alert tools.
 # Source this file: . "$(dirname "$0")/common.sh"
 
 set -euo pipefail
