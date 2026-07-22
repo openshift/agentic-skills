@@ -12,6 +12,10 @@ require_command python3
 require_arg "${1:-}" "alert name" "Usage: query-alert.sh <alert_name>"
 
 ALERT_NAME="$1"
+if [[ ! "$ALERT_NAME" =~ ^[a-zA-Z_:][a-zA-Z0-9_:]*$ ]]; then
+  error_json "INVALID_ARG" "Invalid alert name: '$ALERT_NAME'" \
+    "Alert names must match ^[a-zA-Z_:][a-zA-Z0-9_:]*$"
+fi
 PROMQL="ALERTS{alertname=\"${ALERT_NAME}\"}"
 QUERY=$(urlencode "$PROMQL")
 

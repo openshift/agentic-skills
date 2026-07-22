@@ -18,7 +18,7 @@ RULE=$(echo "$RESPONSE" | jq --arg name "$ALERT_NAME" \
   '[.data.groups[].rules[] | select(.name==$name and .type=="alerting")] | first // empty')
 
 if [[ -z "$RULE" || "$RULE" == "null" ]]; then
-  printf '{"alert_name":"%s","found":false}\n' "$ALERT_NAME"
+  jq -n --arg name "$ALERT_NAME" '{alert_name: $name, found: false}'
 else
   echo "$RULE" | jq --arg name "$ALERT_NAME" '{
     alert_name: $name,

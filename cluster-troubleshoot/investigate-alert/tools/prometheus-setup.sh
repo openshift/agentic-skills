@@ -23,5 +23,5 @@ if [[ -z "$THANOS_URL" ]]; then
     "Check: oc get route thanos-querier -n openshift-monitoring"
 fi
 
-printf 'export TOKEN=%s\n' "$TOKEN"
-printf 'export THANOS_URL=%s\n' "$THANOS_URL"
+printf 'export TOKEN=%q\n' "$TOKEN"
+printf 'export THANOS_URL=%q\n' "$THANOS_URL"

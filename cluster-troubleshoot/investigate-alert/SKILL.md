@@ -20,7 +20,7 @@ description: Investigate one or more firing OpenShift alerts to determine root c
 - No URLs unless from command output or provided context.
 - List actual resources before inspecting them; never guess pod names, use label selectors or owner references.
 - Sample up to 3 representative pods per workload, not all.
-- All `tools/` scripts output JSON. Use `jq` for further filtering when needed.
+- All `tools/` scripts output JSON except `prometheus-setup.sh` (shell export commands for `eval`). Use `jq` for further filtering when needed.
 - When running raw `oc` commands, use `-o json | jq` for structured data extraction.
 - Do not repeat the same command with the same arguments.
 - Do not ask the user to run a command; gather the information yourself.
@@ -28,7 +28,7 @@ description: Investigate one or more firing OpenShift alerts to determine root c
 
 # Tools
 
-The `tools/` directory contains diagnostic scripts. All output JSON to stdout and return structured error objects on failure. Run `eval $(bash tools/prometheus-setup.sh)` once per session before using Prometheus tools.
+The `tools/` directory contains diagnostic scripts. All output JSON to stdout and return structured error objects on failure, except `prometheus-setup.sh` which prints shell export commands for `eval`. Run `eval $(bash tools/prometheus-setup.sh)` once per session before using Prometheus tools.
 
 ## Prometheus
 

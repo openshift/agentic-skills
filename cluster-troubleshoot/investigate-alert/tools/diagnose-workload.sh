@@ -99,4 +99,8 @@ case "$KIND" in
       rollout_history: $hist
     }'
     ;;
+  *)
+    error_json "UNSUPPORTED_KIND" "Unsupported workload kind: $KIND" \
+      "Supported kinds: deployment, statefulset, daemonset"
+    ;;
 esac
