@@ -302,14 +302,14 @@ class TestCmdOlmCheck(unittest.TestCase):
         )
 
     def test_fallback_search(self):
-        """When OpenShift batch misses a package, fallback to direct search."""
-        call_count = [0]
+        """Fallback searches product name with spaces, not hyphens."""
+        search_names = []
 
         def mock_search(name):
-            call_count[0] += 1
+            search_names.append(name)
             if name == "OpenShift":
                 return []
-            if name == "cluster-logging":
+            if name == "cluster logging":
                 return [SAMPLE_PRODUCT]
             return []
 
@@ -322,7 +322,10 @@ class TestCmdOlmCheck(unittest.TestCase):
             output["lifecycle_unavailable"], [],
             "cluster-logging should be found via fallback search",
         )
-        self.assertEqual(call_count[0], 2, "Should make 2 API calls: OpenShift batch + fallback")
+        self.assertEqual(
+            search_names, ["OpenShift", "cluster logging"],
+            "Fallback should search with spaces, not hyphens",
+        )
 
 
     def test_empty_package_skips_api_call(self):

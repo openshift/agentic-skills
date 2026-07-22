@@ -13,7 +13,7 @@ All queries go through `product-lifecycle/scripts/plc_lookup.py` — a standalon
 Python 3 script with no dependencies beyond stdlib. Run with `-h` for full usage:
 
 ```bash
-./product-lifecycle/scripts/plc_lookup.py -h
+python3 product-lifecycle/scripts/plc_lookup.py -h
 ```
 
 ### Commands
@@ -22,13 +22,13 @@ Python 3 script with no dependencies beyond stdlib. Run with `-h` for full usage
 
 ```bash
 # Look up a product
-./product-lifecycle/scripts/plc_lookup.py products "logging for Red Hat OpenShift"
+python3 product-lifecycle/scripts/plc_lookup.py products "logging for Red Hat OpenShift"
 
 # With OCP compatibility check
-./product-lifecycle/scripts/plc_lookup.py products "logging for Red Hat OpenShift" --ocp 4.21
+python3 product-lifecycle/scripts/plc_lookup.py products "logging for Red Hat OpenShift" --ocp 4.21
 
 # Look up OCP itself
-./product-lifecycle/scripts/plc_lookup.py products "Red Hat OpenShift Container Platform"
+python3 product-lifecycle/scripts/plc_lookup.py products "Red Hat OpenShift Container Platform"
 ```
 
 Returns matching product versions with support status, OCP compatibility,
@@ -40,12 +40,15 @@ Be specific with product names to avoid overly broad results.
 #### `olm-check` — Batch check OLM operators
 
 ```bash
-./product-lifecycle/scripts/plc_lookup.py olm-check --ocp 4.21 \
+python3 product-lifecycle/scripts/plc_lookup.py olm-check --ocp 4.21 \
   --operators '[{"package":"cluster-logging"},{"package":"web-terminal"}]'
 ```
 
 Looks up each operator by its OLM `package` name. Reports
-`lifecycle_unavailable` for operators not tracked in the API.
+`lifecycle_unavailable` for operators not tracked by package name.
+When `olm-check` reports `lifecycle_unavailable`, retry those operators
+with `products` using the operator's product name (e.g. "compliance operator")
+before concluding that lifecycle data is unavailable.
 
 ## Output Format
 
@@ -76,5 +79,8 @@ All commands output JSON. Each product version entry includes:
 - `ocp_versions` is only present on **layered product** versions, not on OCP itself.
 - Not all operators have lifecycle entries — report "lifecycle data unavailable"
   rather than treating missing data as an error.
+- An operator has lifecycle data only if the API returns an entry matching its
+  **installed version**. If the API tracks the package but not the specific
+  version installed, treat it as "lifecycle data unavailable" for that version.
 - The `package` field in API responses maps to the OLM Subscription's
   `spec.name` — use this for exact matching, not product name.
