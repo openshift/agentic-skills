@@ -501,5 +501,65 @@ class TestLiveAPI(unittest.TestCase):
         )
 
 
+class TestConnectivityCheck(unittest.TestCase):
+    def test_successful_connectivity(self):
+        with patch.object(plc_lookup.urllib.request, "urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.status = 200
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = plc_lookup.check_connectivity("https://example.com/products")
+            self.assertTrue(result)
+
+    def test_failed_connectivity(self):
+        with patch.object(plc_lookup.urllib.request, "urlopen",
+                          side_effect=Exception("Network error")):
+            result = plc_lookup.check_connectivity("https://example.com/products")
+            self.assertFalse(result)
+
+
+class TestGetProductsApiBase(unittest.TestCase):
+    def test_public_api_available(self):
+        with patch.object(plc_lookup, "check_connectivity", side_effect=lambda url, **kw: url == plc_lookup.API_BASE):
+            base = plc_lookup.get_products_api_base()
+            self.assertEqual(base, plc_lookup.API_BASE)
+
+    def test_cincinnati_fallback(self):
+        def mock_connectivity(url, **kw):
+            return url == "https://cincinnati.example.com/products"
+
+        with patch.object(plc_lookup, "check_connectivity", side_effect=mock_connectivity):
+            base = plc_lookup.get_products_api_base("https://cincinnati.example.com")
+            self.assertEqual(base, "https://cincinnati.example.com/products")
+
+    def test_no_api_available_raises(self):
+        with patch.object(plc_lookup, "check_connectivity", return_value=False):
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.get_products_api_base()
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "no_products_data")
+
+
+class TestCincinnatiUrlParameter(unittest.TestCase):
+    def test_products_with_cincinnati_url(self):
+        with _mock_api_search([SAMPLE_PRODUCT]):
+            output = _run_main([
+                "products", "logging",
+                "--cincinnati-url", "https://cincinnati.example.com"
+            ])
+        self.assertGreater(output["total"], 0)
+
+    def test_olm_check_with_cincinnati_url(self):
+        with _mock_api_search([SAMPLE_PRODUCT]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.21",
+                "--operators", '[{"package":"cluster-logging"}]',
+                "--cincinnati-url", "https://cincinnati.example.com"
+            ])
+        self.assertEqual(output["operators_checked"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
