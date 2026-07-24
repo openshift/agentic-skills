@@ -73,7 +73,7 @@ SAMPLE_PRODUCT_DUPLICATE_PKG = {
     "former_names": [],
     "versions": [
         {
-            "name": "1.8",
+            "name": "1.8.x",
             "type": "Full Support",
             "openshift_compatibility": "4.16, 4.17",
             "phases": [],
@@ -95,6 +95,45 @@ SAMPLE_PRODUCT_DUPLICATE_PKG_2 = {
             "openshift_compatibility": "4.16, 4.17",
             "phases": [],
         },
+        {
+            "type": "Tech Preview",
+            "openshift_compatibility": "4.18",
+            "phases": [],
+        },
+    ],
+}
+
+SAMPLE_SKUPPER_NO_COMPAT = {
+    "name": "Red Hat Service Interconnect",
+    "package": "skupper-operator",
+    "is_operator": True,
+    "is_layered_product": False,
+    "is_retired": False,
+    "former_names": [],
+    "versions": [
+        {
+            "name": "2.1.x",
+            "type": "Full Support",
+            "openshift_compatibility": None,
+            "phases": [{"name": "Full support", "start_date": "2025-01-01", "end_date": "2026-01-01"}],
+        },
+    ],
+}
+
+SAMPLE_SKUPPER_WITH_COMPAT = {
+    "name": "Red Hat Service Interconnect Operator",
+    "package": "skupper-operator",
+    "is_operator": True,
+    "is_layered_product": False,
+    "is_retired": False,
+    "former_names": [],
+    "versions": [
+        {
+            "name": "2.1.x",
+            "type": "Full Support",
+            "openshift_compatibility": "4.12, 4.14, 4.16, 4.17, 4.18, 4.19, 4.20, 4.21",
+            "phases": [{"name": "Full support", "start_date": "2025-01-01", "end_date": "2026-01-01"}],
+        },
     ],
 }
 
@@ -102,6 +141,7 @@ SAMPLE_PRODUCT_DUPLICATE_PKG_2 = {
 def _mock_api_search(data):
     """Return a patcher that makes api_search return the given data."""
     return patch.object(plc_lookup, "api_search", return_value=data)
+
 
 
 def _run_main(args):
@@ -244,25 +284,122 @@ class TestCmdProducts(unittest.TestCase):
 
 
 class TestCmdOlmCheck(unittest.TestCase):
-    def test_found_operator(self):
+    def test_found_with_version(self):
+        """Version provided and tracked → no error, with status."""
+        with _mock_api_search([SAMPLE_PRODUCT]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.21",
+                "--operators", '[{"package":"cluster-logging","version":"6.5.0"}]',
+            ])
+        self.assertEqual(output["ocp_target"], "4.21")
+        self.assertEqual(output["operators_checked"], 1)
+        self.assertEqual(output["lifecycle_unavailable"], [])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(r["requested_version"], "6.5")
+        self.assertEqual(r["product"], "logging for Red Hat OpenShift")
+        self.assertEqual(r["status"], "Full Support")
+        self.assertTrue(r["ocp_compatible"])
+
+    def test_found_with_v_prefix(self):
+        """Leading 'v' in version is stripped before matching."""
+        with _mock_api_search([SAMPLE_PRODUCT]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.21",
+                "--operators", '[{"package":"cluster-logging","version":"v6.5.0"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(r["requested_version"], "6.5")
+        self.assertEqual(r["product"], "logging for Red Hat OpenShift")
+
+    def test_found_with_x_suffix(self):
+        """API version '1.8.x' matches normalized '1.8'."""
+        with _mock_api_search([SAMPLE_PRODUCT_DUPLICATE_PKG]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.17",
+                "--operators", '[{"package":"skupper-operator","version":"1.8.2"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(r["requested_version"], "1.8")
+        self.assertEqual(r["product"], "Red Hat Service Interconnect Operator")
+
+    def test_prefers_product_with_ocp_compatibility(self):
+        """When multiple products share a package, prefer the one with openshift_compatibility."""
+        with _mock_api_search([SAMPLE_SKUPPER_NO_COMPAT, SAMPLE_SKUPPER_WITH_COMPAT]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.17",
+                "--operators", '[{"package":"skupper-operator","version":"2.1.0"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(r["product"], "Red Hat Service Interconnect Operator")
+        self.assertTrue(r["ocp_compatible"])
+
+    def test_prefers_product_with_ocp_compatibility_reversed_order(self):
+        """Same preference regardless of product order in API response."""
+        with _mock_api_search([SAMPLE_SKUPPER_WITH_COMPAT, SAMPLE_SKUPPER_NO_COMPAT]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.17",
+                "--operators", '[{"package":"skupper-operator","version":"2.1.0"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(r["product"], "Red Hat Service Interconnect Operator")
+        self.assertTrue(r["ocp_compatible"])
+
+    def test_version_entry_missing_name(self):
+        """Version entries with no 'name' key don't crash."""
+        with _mock_api_search([SAMPLE_PRODUCT_DUPLICATE_PKG_2]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.17",
+                "--operators", '[{"package":"skupper-operator","version":"1.8.0"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(r["requested_version"], "1.8")
+
+    def test_version_entry_missing_name_no_version(self):
+        """No version + nameless entries don't crash; nameless excluded from available_versions."""
+        with _mock_api_search([SAMPLE_PRODUCT_DUPLICATE_PKG_2]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.17",
+                "--operators", '[{"package":"skupper-operator"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertIn("1.8", r["available_versions"])
+        self.assertNotIn(None, r["available_versions"])
+
+    def test_found_no_version(self):
+        """No version provided → no error, with available_versions."""
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
                 "--operators", '[{"package":"cluster-logging"}]',
             ])
-        self.assertEqual(output["ocp_target"], "4.21")
-        self.assertEqual(output["operators_checked"], 1)
-        self.assertEqual(
-            output["lifecycle_unavailable"], [],
-            "cluster-logging should be found in the batch",
-        )
-        found_products = [r["product"] for r in output["results"] if "product" in r]
-        self.assertIn(
-            "logging for Red Hat OpenShift", found_products,
-            "cluster-logging should resolve to 'logging for Red Hat OpenShift'",
-        )
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertIn("available_versions", r)
+        self.assertIn("6.5", r["available_versions"])
+        self.assertIn("5.9", r["available_versions"])
 
-    def test_unavailable_operator(self):
+    def test_version_not_tracked(self):
+        """Package exists but version doesn't → error with available_versions."""
+        with _mock_api_search([SAMPLE_PRODUCT]):
+            output = _run_main([
+                "olm-check", "--ocp", "4.21",
+                "--operators", '[{"package":"cluster-logging","version":"9.9.0"}]',
+            ])
+        r = output["results"][0]
+        self.assertEqual(r["requested_version"], "9.9")
+        self.assertIn("version 9.9 not tracked", r["error"])
+        self.assertIn("6.5", r["available_versions"])
+        self.assertEqual(output["lifecycle_unavailable"], ["cluster-logging"])
+
+    def test_package_not_found(self):
+        """Package not in API → error, in lifecycle_unavailable."""
         with _mock_api_search([]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
@@ -270,86 +407,53 @@ class TestCmdOlmCheck(unittest.TestCase):
             ])
         self.assertEqual(output["operators_checked"], 1)
         self.assertEqual(output["lifecycle_unavailable"], ["nonexistent-operator"])
-        self.assertEqual(output["results"][0]["status"], "lifecycle_unavailable")
+        r = output["results"][0]
+        self.assertIn("not found", r["error"])
 
-    def test_duplicate_package_preserves_all_products(self):
-        """Multiple products sharing a package should all appear in results."""
-        batch = [SAMPLE_PRODUCT_DUPLICATE_PKG, SAMPLE_PRODUCT_DUPLICATE_PKG_2]
-        with _mock_api_search(batch):
-            output = _run_main([
-                "olm-check", "--ocp", "4.17",
-                "--operators", '[{"package":"skupper-operator"}]',
-            ])
-        self.assertEqual(
-            output["lifecycle_unavailable"], [],
-            "skupper-operator should be found",
-        )
-        product_names = {r["product"] for r in output["results"] if "product" in r}
-        self.assertIn("Red Hat Service Interconnect", product_names)
-        self.assertIn("Red Hat Service Interconnect Operator", product_names)
-
-    def test_mixed_found_and_unavailable(self):
+    def test_mixed_results(self):
+        """Batch with success, version-missing, and package-missing operators."""
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators",
-                '[{"package":"cluster-logging"},{"package":"nonexistent"}]',
+                "--operators", json.dumps([
+                    {"package": "cluster-logging", "version": "6.5.0"},
+                    {"package": "cluster-logging", "version": "9.9.0"},
+                    {"package": "nonexistent", "version": "1.0.0"},
+                ]),
             ])
-        self.assertEqual(output["operators_checked"], 2)
-        self.assertEqual(
-            output["lifecycle_unavailable"], ["nonexistent"],
-            "Only nonexistent should be unavailable",
-        )
+        self.assertEqual(output["operators_checked"], 3)
+        self.assertNotIn("error", output["results"][0])
+        self.assertIn("not tracked", output["results"][1]["error"])
+        self.assertIn("not found", output["results"][2]["error"])
+        self.assertEqual(output["lifecycle_unavailable"], ["cluster-logging", "nonexistent"])
 
-    def test_fallback_search(self):
-        """Fallback searches product name with spaces, not hyphens."""
-        search_names = []
+    def test_single_api_call(self):
+        """olm-check fetches all products in one call."""
+        call_count = [0]
 
-        def mock_search(name):
-            search_names.append(name)
-            if name == "OpenShift":
-                return []
-            if name == "cluster logging":
-                return [SAMPLE_PRODUCT]
-            return []
+        def counting_search(url=plc_lookup.API_BASE, name=None):
+            call_count[0] += 1
+            return [SAMPLE_PRODUCT]
 
-        with patch.object(plc_lookup, "api_search", side_effect=mock_search):
+        with patch.object(plc_lookup, "api_search", side_effect=counting_search):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
                 "--operators", '[{"package":"cluster-logging"}]',
             ])
-        self.assertEqual(
-            output["lifecycle_unavailable"], [],
-            "cluster-logging should be found via fallback search",
-        )
-        self.assertEqual(
-            search_names, ["OpenShift", "cluster logging"],
-            "Fallback should search with spaces, not hyphens",
-        )
+        self.assertNotIn("error", output["results"][0])
+        self.assertEqual(call_count[0], 1, "Should call api_search exactly once")
 
-
-    def test_empty_package_skips_api_call(self):
-        """Empty package name should not trigger an API call."""
-        call_count = [0]
-
-        def mock_search(name):
-            call_count[0] += 1
-            return []
-
-        with patch.object(plc_lookup, "api_search", side_effect=mock_search):
+    def test_empty_package(self):
+        """Empty package name → error."""
+        with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
                 "--operators", '[{"package":""},{}]',
             ])
         self.assertEqual(output["operators_checked"], 2)
-        self.assertEqual(
-            output["lifecycle_unavailable"], ["", ""],
-            "Both empty-package operators should be unavailable",
-        )
-        self.assertEqual(
-            call_count[0], 1,
-            "Should only call api_search once (OpenShift batch), not for empty packages",
-        )
+        self.assertEqual(output["lifecycle_unavailable"], ["", ""])
+        self.assertIn("error", output["results"][0])
+        self.assertIn("error", output["results"][1])
 
 
 class TestApiSearchErrors(unittest.TestCase):
@@ -359,7 +463,7 @@ class TestApiSearchErrors(unittest.TestCase):
         with patch.object(plc_lookup.urllib.request, "urlopen",
                           side_effect=plc_lookup.urllib.error.URLError("connection refused")):
             with self.assertRaises(SystemExit) as ctx:
-                plc_lookup.api_search("test")
+                plc_lookup.api_search(name="test")
             error = json.loads(str(ctx.exception))
             self.assertEqual(error["error"], "api_request_failed")
             self.assertIn("connection refused", error["detail"])
@@ -371,7 +475,7 @@ class TestApiSearchErrors(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch.object(plc_lookup.urllib.request, "urlopen", return_value=mock_resp):
             with self.assertRaises(SystemExit) as ctx:
-                plc_lookup.api_search("test")
+                plc_lookup.api_search(name="test")
             error = json.loads(str(ctx.exception))
             self.assertEqual(error["error"], "invalid_response")
 
@@ -382,7 +486,7 @@ class TestApiSearchErrors(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch.object(plc_lookup.urllib.request, "urlopen", return_value=mock_resp):
             with self.assertRaises(SystemExit) as ctx:
-                plc_lookup.api_search("test")
+                plc_lookup.api_search(name="test")
             error = json.loads(str(ctx.exception))
             self.assertEqual(error["error"], "unexpected_response")
             self.assertIn("results", error["keys"])
