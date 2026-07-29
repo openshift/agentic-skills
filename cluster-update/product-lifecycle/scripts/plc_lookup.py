@@ -4,19 +4,87 @@
 import argparse
 import collections
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
 API_BASE = "https://access.redhat.com/product-life-cycles/api/v2/products"
+PRODUCTS_PATH = os.path.join(os.path.dirname(__file__), "data", "products.json")
 
+def check_connectivity(url, timeout=5):
+    """Quick connectivity check to an API endpoint."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                raise Exception(f"failed to reach {url}: http_status {resp.status}")
+            return
+    except urllib.error.URLError as e:
+        raise Exception(f"failed to reach {url}: {e.reason}")
+    except urllib.error.HTTPError as e:
+        raise Exception(f"http request failed for {url} ({e.code}): {e.read()}")
+    except Exception as e:
+        raise Exception(f"cannot reach {url}: {e}")
 
-def api_search(name=None):
+def search_local(name=None, path=PRODUCTS_PATH):
+    try:
+        with open(path, "r") as file:
+            body = json.loads(file.read())
+    except OSError as e:
+        raise SystemExit(json.dumps({"error": "file_open_error", "detail": str(e)}, indent=2))
+    except (json.JSONDecodeError, ValueError) as e:
+        raise SystemExit(json.dumps({"error": "invalid_products_file", "detail": str(e)}, indent=2))
+    if "data" not in body:
+        raise SystemExit(json.dumps({"error": "malformatted_products_file", "detail": "missing expected field 'data' in products json"}, indent=2))
+
+    if name is None:
+        return body["data"]
+
+    # Implemented based on the filtering logic used by the lifecycle api
+    # https://gitlab.cee.redhat.com/cplabsapps/lifecycle/-/blob/3e54ac686aab49ebc7732f9fdcd0ada210fbf2bd/apps/lifecycle-api/src/services/productService.ts#L36
+    # API implements name as a comma separated url parameter
+    # body["data"][]["name"] is a string and body["data"][]["former_names"] is string array that may be empty
+    # If at least one of the url parameter specified names is a substring of an entry's name, that entry is included in results
+    # If NO results are found after checking all names, fall back to former_names and return entries where
+    # at least one of the former_names values has one of the desired name strings.
+    names = []
+    former_names = []
+    cleaned_names = name.lower().split(",")
+    for i in body["data"]:
+        for n in cleaned_names:
+            if "name" in i and n in i["name"].lower():
+                names.append(i)
+            elif "former_names" in i:
+                for fname in i["former_names"]:
+                    if n in fname.lower():
+                        former_names.append(i)
+                        break
+    if len(names) > 0:
+        return names
+    else:
+        return former_names
+
+def api_search(name=None, url=API_BASE):
     """Fetch products from the PLC API, optionally filtering by name."""
-    url = API_BASE
+    try:
+        check_connectivity(url, timeout=5)
+    except Exception as connectivity_error:
+        # API unreachable, try local products file as fallback
+        try:
+            return search_local(name=name)
+        except SystemExit as fallback_error:
+            # Public API and local file failed. Report errors
+            fallback_error_dict = json.loads(str(fallback_error))
+            raise SystemExit(json.dumps({
+                "error": "api_unreachable",
+                "api_error": str(connectivity_error),
+                "local_fallback_error": f"{fallback_error_dict['error']}: {fallback_error_dict['detail']}"
+            }, indent=2))
+
     if name:
-        url = f"{url}?{urllib.parse.urlencode({'name': name})}"
+        url = f"{url}?{urllib.parse.urlencode({'name': name})}&match_mode=contains"
     req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -26,7 +94,7 @@ def api_search(name=None):
     except (json.JSONDecodeError, ValueError) as e:
         raise SystemExit(json.dumps({"error": "invalid_response", "detail": str(e)}, indent=2))
     if "data" not in body:
-        raise SystemExit(json.dumps({"error": "unexpected_response", "keys": list(body.keys())}, indent=2))
+        raise SystemExit(json.dumps({"error": "unexpected_response", "detail": "missing expected field 'data' in response", "keys": list(body.keys())}, indent=2))
     return body["data"]
 
 
