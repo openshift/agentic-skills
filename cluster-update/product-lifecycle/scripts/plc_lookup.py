@@ -12,8 +12,11 @@ import urllib.request
 API_BASE = "https://access.redhat.com/product-life-cycles/api/v2/products"
 
 
-def api_search(name):
-    url = f"{API_BASE}?{urllib.parse.urlencode({'name': name})}"
+def api_search(name=None):
+    """Fetch products from the PLC API, optionally filtering by name."""
+    url = API_BASE
+    if name:
+        url = f"{url}?{urllib.parse.urlencode({'name': name})}"
     req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -25,6 +28,13 @@ def api_search(name):
     if "data" not in body:
         raise SystemExit(json.dumps({"error": "unexpected_response", "keys": list(body.keys())}, indent=2))
     return body["data"]
+
+
+def _normalize_version(version):
+    """Normalize to major.minor, stripping leading 'v' (e.g. 'v1.9.0' → '1.9')."""
+    version = version.lstrip("v")
+    parts = version.split(".")
+    return ".".join(parts[:2]) if len(parts) >= 2 else version
 
 
 def parse_ocp_versions(compat_string):
@@ -60,7 +70,7 @@ def format_product_version(product, version, target_ocp=None):
 
 
 def cmd_products(args, output=sys.stdout):
-    products = api_search(args.name)
+    products = api_search(name=args.name)
     if not products:
         json.dump({"error": "no products found", "query": args.name}, output, indent=2)
         output.write("\n")
@@ -84,51 +94,78 @@ def cmd_olm_check(args, output=sys.stdout):
     operators = json.loads(args.operators)
     target = args.ocp
 
-    batch = api_search("OpenShift")
+    all_products = api_search()
     by_package = collections.defaultdict(list)
-    for p in batch:
+    for p in all_products:
         pkg = p.get("package")
         if pkg:
             by_package[pkg].append(p)
 
     results = []
-    missed_packages = []
 
     for op in operators:
         pkg = op.get("package", "")
+        requested_version = op.get("version", "")
 
         if not pkg:
-            results.append({
-                "package": pkg,
-                "status": "lifecycle_unavailable",
-                "reason": "empty package name",
-            })
-            missed_packages.append(pkg)
+            results.append({"package": pkg, "error": "empty package name"})
             continue
 
         products = by_package.get(pkg)
 
         if not products:
-            extra = api_search(pkg.replace("-", " "))
-            products = [p for p in extra if p.get("package") == pkg]
-
-        if not products:
-            results.append({
-                "package": pkg,
-                "status": "lifecycle_unavailable",
-                "reason": "no lifecycle data found for this package",
-            })
-            missed_packages.append(pkg)
+            entry = {"package": pkg, "error": "package not found in PLC API"}
+            if requested_version:
+                entry["requested_version"] = _normalize_version(requested_version)
+            results.append(entry)
             continue
 
-        for product in products:
-            for v in product["versions"]:
-                results.append(format_product_version(product, v, target_ocp=target))
+        all_versions = {v.get("name") for p in products for v in p["versions"]} - {None}
+
+        if not requested_version:
+            results.append({
+                "package": pkg,
+                "product": products[0]["name"],
+                "available_versions": sorted(all_versions),
+            })
+            continue
+
+        norm = _normalize_version(requested_version)
+        matches = []
+        for p in products:
+            for v in p["versions"]:
+                if v.get("name") in (norm, f"{norm}.x"):
+                    matches.append((p, v))
+
+        matched = next(
+            (m for m in matches if m[1].get("openshift_compatibility")),
+            matches[0] if matches else None,
+        )
+
+        if not matched:
+            results.append({
+                "package": pkg,
+                "requested_version": norm,
+                "error": f"version {norm} not tracked",
+                "available_versions": sorted(all_versions),
+            })
+            continue
+
+        product, version = matched
+        formatted = format_product_version(product, version, target_ocp=target)
+        results.append({
+            "package": pkg,
+            "requested_version": norm,
+            "product": formatted["product"],
+            "status": formatted["status"],
+            "ocp_compatible": formatted.get("ocp_compatible"),
+            "phases": formatted["phases"],
+        })
 
     json.dump({
         "ocp_target": target,
         "operators_checked": len(operators),
-        "lifecycle_unavailable": missed_packages,
+        "lifecycle_unavailable": [r["package"] for r in results if "error" in r],
         "results": results,
     }, output, indent=2)
     output.write("\n")
@@ -141,7 +178,8 @@ def main(args=None, output=sys.stdout):
         epilog="Examples:\n"
                '  %(prog)s products "logging for Red Hat OpenShift"\n'
                '  %(prog)s products "logging for Red Hat OpenShift" --ocp 4.21\n'
-               '  %(prog)s olm-check --ocp 4.21 --operators \'[{"package":"cluster-logging"}]\'\n',
+               '  %(prog)s olm-check --ocp 4.21 --operators \'[{"package":"cluster-logging"}]\'\n'
+               '  %(prog)s olm-check --ocp 4.21 --operators \'[{"package":"cluster-logging","version":"6.5.1"},{"package":"openshift-pipelines-operator-rh","version":"1.22.0"}]\'\n',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

@@ -41,29 +41,52 @@ Be specific with product names to avoid overly broad results.
 
 ```bash
 python3 product-lifecycle/scripts/plc_lookup.py olm-check --ocp 4.21 \
-  --operators '[{"package":"cluster-logging"},{"package":"web-terminal"}]'
+  --operators '[{"package":"cluster-logging","version":"6.5.1"},{"package":"web-terminal"}]'
 ```
 
-Looks up each operator by its OLM `package` name. Reports
-`lifecycle_unavailable` for operators not tracked by package name.
-When `olm-check` reports `lifecycle_unavailable`, retry those operators
-with `products` using the operator's product name (e.g. "compliance operator")
-before concluding that lifecycle data is unavailable.
+Looks up each operator by its OLM `package` name. Each operator in the
+JSON array accepts `package` (required) and `version` (optional).
+
+Returns **one result per operator**. The shape depends on whether a
+`version` was provided:
+
+- **With version (matched):** `package`, `requested_version`, `product`,
+  `status`, `ocp_compatible`, `phases`. No `error` field.
+- **Without version (package exists):** `package`, `product`,
+  `available_versions`. No `error` field.
+- **Error:** `error` field set — explains what went wrong (package not
+  found, version not tracked). Includes `available_versions` when the
+  package exists but the version doesn't.
+
+When a version is provided, the tool normalizes it to major.minor
+(e.g. `1.9.0` → `1.9`) and matches against API version names.
+
+Reports `lifecycle_unavailable` listing every operator whose result has `error` set.
+
 
 ## Output Format
 
-All commands output JSON. Each product version entry includes:
+All commands output JSON.
+
+### `products` output
+
+Each product version entry includes `product`, `former_names`, `package`,
+`version`, `status`, `ocp_versions`, `ocp_compatible`, and `phases`.
+
+### `olm-check` output
+
+One entry per operator:
 
 | Field | Description |
 |---|---|
-| `product` | Current product name |
-| `former_names` | Previous product names (useful for search fallback) |
-| `package` | OLM package name (maps to Subscription `spec.name`) |
-| `version` | Version number |
-| `status` | Raw API support status (e.g. `"Full Support"`, `"End of life"`) |
-| `ocp_versions` | List of compatible OCP versions (empty for non-layered products) |
-| `ocp_compatible` | `true`/`false`/`null` — only present when `--ocp` is used |
-| `phases` | Array of lifecycle phases with `name`, `start_date`, `end_date` |
+| `package` | OLM package name queried |
+| `requested_version` | Normalized version checked (when provided) |
+| `error` | Why data is unavailable — absent on success, set on failure |
+| `product` | Product name (on success) |
+| `status` | Raw API support status, e.g. `"Full Support"`, `"End of life"` (on success) |
+| `ocp_compatible` | `true`/`false`/`null` — whether the version is compatible with the target OCP (on success) |
+| `phases` | Lifecycle phases with `name`, `start_date`, `end_date` (on success) |
+| `available_versions` | Versions the API does track (when package exists but version doesn't) |
 
 ## When to Use
 
@@ -77,10 +100,7 @@ All commands output JSON. Each product version entry includes:
 ## Important
 
 - `ocp_versions` is only present on **layered product** versions, not on OCP itself.
-- Not all operators have lifecycle entries — report "lifecycle data unavailable"
-  rather than treating missing data as an error.
-- An operator has lifecycle data only if the API returns an entry matching its
-  **installed version**. If the API tracks the package but not the specific
-  version installed, treat it as "lifecycle data unavailable" for that version.
+- Not all operators have lifecycle entries — `olm-check` sets `error` on the
+  result for operators without data.
 - The `package` field in API responses maps to the OLM Subscription's
   `spec.name` — use this for exact matching, not product name.
