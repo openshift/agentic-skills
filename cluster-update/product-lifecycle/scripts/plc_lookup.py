@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 API_BASE = "https://access.redhat.com/product-life-cycles/api/v2/products"
-PRODUCTS_PATH = "/cincinnati-graph-data/products.json"
+PRODUCTS_PATH = "data/products.json"
 
 
 def check_connectivity(url, timeout=5):
