@@ -1,0 +1,115 @@
+# ── IntelliAide Agent-Level Eval Cases ────────────────────────────────────────
+#
+# These test cases verify that an LLM agent can correctly discover and apply the
+# IntelliAide SKILL.md specification.  They focus on *protocol knowledge* that
+# requires reading comprehension — things that unit tests cannot cover because
+# they depend on agent reasoning, not script mechanics.
+#
+# Implementation constants (min_data_files, max_unwrap_depth, max_chunk_tokens,
+# data_input_path, etc.) are now validated by standalone functional tests in
+# test_functional.py, which exercise the actual scripts deterministically.
+#
+# ── POSITIVE CASES ────────────────────────────────────────────────────────────
+
+- name: priority_tier_count
+  query: "How many priority tiers does the IntelliAide RCA pipeline run analysis passes for?"
+  schema:
+    type: object
+    properties:
+      tier_count:
+        type: integer
+        enum: [1, 2, 3, 4, 5]
+        description: "Number of priority tiers (high/medium/low) in the pipeline. Use the 'intelliaide' skill to find this."
+    required: [tier_count]
+  expected:
+    tier_count: 3
+
+# Source: SKILL.md line 144 → high_priority_file_selection_max: 20
+- name: high_priority_file_selection_max
+  query: "According to IntelliAide's file-selection rules in Step 2b, what is the maximum number of high-priority files the orchestrating agent should select?"
+  schema:
+    type: object
+    properties:
+      max_files:
+        type: integer
+        enum: [10, 15, 20, 25, 30]
+        description: "Upper bound on high-priority file count in Step 2b selection. Use the 'intelliaide' skill to find this."
+    required: [max_files]
+  expected:
+    max_files: 20
+
+# Source: SKILL.md line 89 → "SDK's 1 MB message buffer and crashes the session"
+- name: sdk_buffer_size_mb
+  query: >-
+    IntelliAide's buffer safety rule exists because must-gather bundles are too
+    large to read inline. According to that rule, what is the size in megabytes
+    of the SDK message buffer that a direct file read would overflow?
+  schema:
+    type: object
+    properties:
+      buffer_size_mb:
+        type: integer
+        enum: [1, 5, 10, 50, 100]
+        description: "SDK message buffer size in MB stated in IntelliAide's buffer safety rule. Use the 'intelliaide' skill to find this."
+    required: [buffer_size_mb]
+  expected:
+    buffer_size_mb: 1
+
+# ── NEGATIVE CASES ────────────────────────────────────────────────────────────
+# Each describes a concrete action a naive agent (one without IntelliAide) would
+# naturally take, then asks what IntelliAide's protocol says about that action.
+# These guard against regressions if someone modifies the SKILL.md rules.
+
+# Naive agent action: run 'cat /data/input/.../current.log' to inspect pod logs.
+# Source: SKILL.md lines 88–98 → buffer safety rule, forbidden-command list
+- name: naive_cat_bundle_file_crashes_session
+  query: >-
+    A naive agent without IntelliAide tries to diagnose an etcd issue by running
+    'cat /data/input/namespaces/openshift-etcd/pods/etcd-0/etcd/etcd/logs/current.log'
+    to inspect the pod logs directly. According to IntelliAide's buffer safety rule,
+    what does this action do to the orchestrating agent's session?
+  schema:
+    type: object
+    properties:
+      session_outcome:
+        type: string
+        enum: ["crashes_the_session", "returns_empty_string", "truncates_output", "raises_python_exception", "restarts_the_container"]
+        description: "What happens to the session when a must-gather file is read inline. Use the 'intelliaide' skill to find this."
+    required: [session_outcome]
+  expected:
+    session_outcome: "crashes_the_session"
+
+# Naive agent action: run 'grep -r error /data/input' across all logs.
+# Source: SKILL.md lines 88–98 → explicit forbidden-command list
+- name: naive_grep_r_on_bundle_forbidden
+  query: >-
+    A naive agent without IntelliAide decides to search for errors across the
+    must-gather bundle by running 'grep -r error /data/input'. Does IntelliAide's
+    buffer safety rule permit this command after extract_cluster.py has succeeded?
+  schema:
+    type: object
+    properties:
+      is_permitted:
+        type: boolean
+        description: "Whether grep -r across must-gather bundle files is allowed by IntelliAide's buffer safety rule. Use the 'intelliaide' skill to find this."
+    required: [is_permitted]
+  expected:
+    is_permitted: false
+
+# Naive agent action: fall back to 'kubectl get pods' / 'oc describe' when a
+# pipeline step fails.
+# Source: SKILL.md line 325 → "Never fall back to kubectl/oc commands"
+- name: kubectl_fallback_forbidden_on_pipeline_failure
+  query: >-
+    A step in the IntelliAide pipeline returns an error. A naive agent's instinct
+    is to fall back to 'kubectl get pods' or 'oc describe' to gather data another
+    way. Does IntelliAide's error-handling protocol permit this fallback?
+  schema:
+    type: object
+    properties:
+      fallback_permitted:
+        type: boolean
+        description: "Whether kubectl/oc fallback is allowed when an IntelliAide pipeline step fails. Use the 'intelliaide' skill to find this."
+    required: [fallback_permitted]
+  expected:
+    fallback_permitted: false
