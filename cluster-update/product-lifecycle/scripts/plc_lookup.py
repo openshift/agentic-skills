@@ -10,11 +10,45 @@ import urllib.parse
 import urllib.request
 
 API_BASE = "https://access.redhat.com/product-life-cycles/api/v2/products"
+PRODUCTS_PATH = "data/products.json"
 
 
-def api_search(name=None):
+def check_connectivity(url, timeout=5):
+    """Quick connectivity check to an API endpoint."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+def search_local(name=None, path=PRODUCTS_PATH):
+    try:
+        with open(path, "r") as file:
+            body = json.loads(file.read())
+    except OSError as e:
+        raise SystemExit(json.dumps({"error": "file_open_error", "detail": str(e)}, indent=2))
+    except (json.JSONDecodeError, ValueError) as e:
+        raise SystemExit(json.dumps({"error": "invalid_products_file", "detail": str(e)}, indent=2))
+    if "data" not in body:
+        raise SystemExit(json.dumps({"error": "malfomatted_products_file", "keys": list(body.keys())}, indent=2))
+
+    if name == None:
+        return body["data"]
+
+    result = []
+    cleaned_name=name.lower()
+    for i in body["data"]:
+        if "name" in i and cleaned_name in i["name"].lower():
+            result.append(i)
+    return {"data": result}
+
+def api_search(name=None, url=API_BASE):
     """Fetch products from the PLC API, optionally filtering by name."""
-    url = API_BASE
+    # If public API is unreachable, check for local products file
+    if not check_connectivity(url, timeout=5):
+        return search_local(name=name)
+
     if name:
         url = f"{url}?{urllib.parse.urlencode({'name': name})}"
     req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
