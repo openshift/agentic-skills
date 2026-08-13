@@ -13,21 +13,6 @@ import urllib.request
 API_BASE = "https://access.redhat.com/product-life-cycles/api/v2/products"
 PRODUCTS_PATH = os.path.join(os.path.dirname(__file__), "data", "products.json")
 
-def check_connectivity(url, timeout=5):
-    """Quick connectivity check to an API endpoint."""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status != 200:
-                raise Exception(f"failed to reach {url}: http_status {resp.status}")
-            return
-    except urllib.error.URLError as e:
-        raise Exception(f"failed to reach {url}: {e.reason}")
-    except urllib.error.HTTPError as e:
-        raise Exception(f"http request failed for {url} ({e.code}): {e.read()}")
-    except Exception as e:
-        raise Exception(f"cannot reach {url}: {e}")
-
 def search_local(name=None, path=PRODUCTS_PATH):
     try:
         with open(path, "r") as file:
@@ -68,21 +53,6 @@ def search_local(name=None, path=PRODUCTS_PATH):
 
 def api_search(name=None, url=API_BASE):
     """Fetch products from the PLC API, optionally filtering by name."""
-    try:
-        check_connectivity(url, timeout=5)
-    except Exception as connectivity_error:
-        # API unreachable, try local products file as fallback
-        try:
-            return search_local(name=name)
-        except SystemExit as fallback_error:
-            # Public API and local file failed. Report errors
-            fallback_error_dict = json.loads(str(fallback_error))
-            raise SystemExit(json.dumps({
-                "error": "api_unreachable",
-                "api_error": str(connectivity_error),
-                "local_fallback_error": f"{fallback_error_dict['error']}: {fallback_error_dict['detail']}"
-            }, indent=2))
-
     if name:
         url = f"{url}?{urllib.parse.urlencode({'name': name})}&match_mode=contains"
     req = urllib.request.Request(url, headers={"User-Agent": "plc-lookup/1.0"})
@@ -90,7 +60,17 @@ def api_search(name=None, url=API_BASE):
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read())
     except urllib.error.URLError as e:
-        raise SystemExit(json.dumps({"error": "api_request_failed", "detail": str(e)}, indent=2))
+        # API unreachable, try local products file as fallback
+        try:
+            return search_local(name=name)
+        except SystemExit as fallback_error:
+            # Public API and local file failed. Report errors
+            fallback_error_dict = json.loads(str(fallback_error))
+            raise SystemExit(json.dumps({
+                "error": "api_request_failed",
+                "detail": str(e),
+                "local_fallback_error": f"{fallback_error_dict['error']}: {fallback_error_dict['detail']}"
+            }, indent=2))
     except (json.JSONDecodeError, ValueError) as e:
         raise SystemExit(json.dumps({"error": "invalid_response", "detail": str(e)}, indent=2))
     if "data" not in body:

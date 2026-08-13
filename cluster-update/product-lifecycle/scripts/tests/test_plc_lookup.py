@@ -526,12 +526,12 @@ class TestApiSearchErrors(unittest.TestCase):
     def test_url_error_produces_json(self):
         with patch.object(plc_lookup.urllib.request, "urlopen",
                           side_effect=plc_lookup.urllib.error.URLError("connection refused")):
-            with patch.object(plc_lookup, "check_connectivity"):
+            with patch.object(plc_lookup.search_local, "__defaults__", (None, "invalid-path")):
                 with self.assertRaises(SystemExit) as ctx:
                     plc_lookup.api_search(name="test")
-                error = json.loads(str(ctx.exception))
-                self.assertEqual(error["error"], "api_request_failed")
-                self.assertIn("connection refused", error["detail"])
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "api_request_failed")
+            self.assertIn("connection refused", error["detail"])
 
     def test_invalid_json_produces_error(self):
         mock_resp = MagicMock()
@@ -539,11 +539,10 @@ class TestApiSearchErrors(unittest.TestCase):
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch.object(plc_lookup.urllib.request, "urlopen", return_value=mock_resp):
-            with patch.object(plc_lookup, "check_connectivity"):
-                with self.assertRaises(SystemExit) as ctx:
-                    plc_lookup.api_search(name="test")
-                error = json.loads(str(ctx.exception))
-                self.assertEqual(error["error"], "invalid_response")
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.api_search(name="test")
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "invalid_response")
 
     def test_missing_data_key_produces_error(self):
         mock_resp = MagicMock()
@@ -551,12 +550,11 @@ class TestApiSearchErrors(unittest.TestCase):
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch.object(plc_lookup.urllib.request, "urlopen", return_value=mock_resp):
-            with patch.object(plc_lookup, "check_connectivity"):
-                with self.assertRaises(SystemExit) as ctx:
-                    plc_lookup.api_search(name="test")
-                error = json.loads(str(ctx.exception))
-                self.assertEqual(error["error"], "unexpected_response")
-                self.assertIn("results", error["keys"])
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.api_search(name="test")
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "unexpected_response")
+            self.assertIn("results", error["keys"])
 
 
 class TestHelp(unittest.TestCase):
@@ -670,25 +668,6 @@ class TestLiveAPI(unittest.TestCase):
             len(all_former) > 0,
             f"OCP should have former_names, got: {all_former}",
         )
-
-class TestConnectivityCheck(unittest.TestCase):
-    def test_successful_connectivity(self):
-        with patch.object(plc_lookup.urllib.request, "urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.status = 200
-            mock_resp.__enter__ = lambda s: s
-            mock_resp.__exit__ = MagicMock(return_value=False)
-            mock_urlopen.return_value = mock_resp
-
-            result = plc_lookup.check_connectivity("https://example.com/products")
-            self.assertIsNone(result)
-
-    def test_failed_connectivity(self):
-        with patch.object(plc_lookup.urllib.request, "urlopen",
-                          side_effect=Exception("Network error")):
-            with self.assertRaises(Exception) as ctx:
-                result = plc_lookup.check_connectivity("https://example.com/products")
-            self.assertEqual(str(ctx.exception), "cannot reach https://example.com/products: Network error")
 
 class TestSearchLocal(unittest.TestCase):
     def test_missing_file(self):
