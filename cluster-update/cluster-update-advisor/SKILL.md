@@ -1,6 +1,7 @@
 ---
 name: cluster-update-advisor
 description: Assess OpenShift cluster update (upgrade) readiness and risk. Use when evaluating whether a cluster is safe to update, when an update is available, or when the user asks about update risks, prerequisites, blockers, or best practices.
+license: Apache-2.0
 ---
 
 # Cluster Update Advisor
