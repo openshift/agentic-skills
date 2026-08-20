@@ -1,6 +1,7 @@
 ---
 name: product-lifecycle
 description: Query Red Hat Product Life Cycle data for support phases, end-of-life dates, and OpenShift version compatibility. Use when evaluating whether installed operators or layered products are supported on a given OCP version, approaching end of life, or need upgrading before a cluster upgrade. Also use when the user asks about product support status, EOL dates, or lifecycle phases for any Red Hat product.
+compatibility: network
 license: Apache-2.0
 ---
 
