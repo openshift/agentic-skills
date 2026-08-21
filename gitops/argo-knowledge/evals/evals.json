@@ -1,0 +1,157 @@
+{
+  "skill_name": "argo-knowledge",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Generate a multi-source Application called 'webapp' in the argocd namespace that combines a Helm chart from oci://registry.example.com/charts/webapp at version 2.x with environment-specific values from a Git repo https://github.com/org/config.git (branch main, path envs/production/values.yaml). Deploy to namespace 'webapp-prod' on in-cluster. Use automated sync with selfHeal but WITHOUT prune (the team wants manual prune control). Use valuesObject (not the deprecated string values field) for any inline Helm values. Set server-side apply and respect ignore differences for /spec/replicas on Deployments.",
+      "expected_output": "A multi-source Application using spec.sources[] array (not spec.source singular), with one Helm source and one Git source providing values via $values ref, automated sync without prune, ServerSideApply, and ignoreDifferences.",
+      "files": [],
+      "expectations": [
+        "Output uses spec.sources (plural array) not spec.source (singular) — multi-source Applications require the array form",
+        "Output contains exactly two entries in the sources array",
+        "First source is Helm with repoURL: oci://registry.example.com/charts/webapp and chart field",
+        "Helm source uses targetRevision with semver constraint 2.x or similar",
+        "Second source is Git with repoURL: https://github.com/org/config.git",
+        "Git source has ref.targetRevision: main and path containing envs/production",
+        "Helm source references the Git source values via $values syntax (e.g., $values/envs/production/values.yaml)",
+        "Output does NOT use helm.values as a string — uses helm.valuesObject or the $values ref pattern",
+        "Sync policy has automated with selfHeal: true but prune: false or prune omitted",
+        "syncOptions includes ServerSideApply=true",
+        "ignoreDifferences entry for group apps kind Deployment with jsonPointers /spec/replicas",
+        "Destination namespace is webapp-prod with server https://kubernetes.default.svc"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create an ApplicationSet using the merge generator that combines a cluster generator (selecting clusters labeled tier=production) with a git file generator reading config from https://github.com/org/fleet-config.git at path 'clusters/{{name}}/config.json'. The merge key should be 'name' so cluster-specific config from Git overrides the cluster generator defaults. Use goTemplate with goTemplateOptions missingkey=error. Each generated Application should deploy from an OCI Helm chart oci://ghcr.io/org/app at the version specified in the config file's 'appVersion' field. Set preserveResourcesOnDeletion at the spec level. Add an ignoreApplicationDifferences entry to ignore changes to spec.source.targetRevision so the image updater can modify it without causing drift.",
+      "expected_output": "An ApplicationSet with merge generator combining cluster and git file generators, goTemplateOptions, OCI Helm source, preserveResourcesOnDeletion at spec level, and ignoreApplicationDifferences.",
+      "files": [],
+      "expectations": [
+        "Output contains kind: ApplicationSet with apiVersion: argoproj.io/v1alpha1",
+        "Output has goTemplate: true AND goTemplateOptions containing missingkey=error",
+        "Output uses a merge generator with mergeKeys containing 'name'",
+        "Merge generator contains a clusters generator with selector matchLabels tier: production",
+        "Merge generator contains a git file generator with repoURL https://github.com/org/fleet-config.git",
+        "Git file generator path references clusters/{{.name}}/config.json or equivalent Go template syntax",
+        "Template source uses oci:// prefix for the chart URL",
+        "Template source targetRevision references the appVersion field from the config (e.g., {{.appVersion}})",
+        "preserveResourcesOnDeletion: true is at spec level (sibling of generators/template), NOT under strategy",
+        "ignoreApplicationDifferences is present with jsonPointers or jqPathExpressions targeting spec.source.targetRevision"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Generate an Argo Rollout for 'checkout-svc' in namespace 'checkout' with blue-green strategy. Active service is 'checkout-active', preview service is 'checkout-preview'. Do NOT auto-promote — require manual approval. Add a prePromotionAnalysis that runs an AnalysisTemplate called 'smoke-test' which uses a Kubernetes Job provider (not Prometheus). The Job should run an image 'registry.example.com/smoke-tests:latest' that curls the preview service and exits 0 on success. The analysis should have a single measurement with no interval (run once). Also configure scaleDownDelaySeconds to 600 so the old ReplicaSet stays around for 10 minutes after promotion. Generate both the Rollout and the AnalysisTemplate.",
+      "expected_output": "A Rollout with blue-green strategy, manual promotion, prePromotionAnalysis referencing a Job-based AnalysisTemplate, and scaleDownDelaySeconds.",
+      "files": [],
+      "expectations": [
+        "Output contains kind: Rollout with strategy.blueGreen (not canary)",
+        "Blue-green config has activeService: checkout-active and previewService: checkout-preview",
+        "autoPromotionEnabled is explicitly set to false",
+        "prePromotionAnalysis references templates with templateName: smoke-test",
+        "scaleDownDelaySeconds is set to 600",
+        "Output contains a separate AnalysisTemplate kind with name: smoke-test",
+        "AnalysisTemplate metric uses provider.job (not prometheus, not web)",
+        "Job spec container image is registry.example.com/smoke-tests:latest",
+        "Job container command or args references the preview service URL or hostname",
+        "AnalysisTemplate metric has count: 1 or count omitted (single measurement, no interval)"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Set up Argo CD notifications with TWO notification services: 1) Slack for the 'platform-alerts' channel on sync failures with a template using Slack Block Kit (not legacy attachments) — use a section block with mrkdwn text showing app name, sync status, and error message, plus an actions block with a button linking to the ArgoCD UI. 2) GitHub commit status updates on the 'infra' repo https://github.com/org/infra using a GitHub App (appID and installationID from secret, not a PAT). The GitHub trigger should fire on every sync operation and set the commit status to success/failure/pending based on the operation phase. Use oncePer: app.status.operationState.syncResult.revision to avoid duplicate statuses for the same commit. Show all ConfigMap entries, Secret entries, and the Application annotations needed.",
+      "expected_output": "Complete notification setup with Slack Block Kit template, GitHub App commit status, oncePer dedup, and proper annotations.",
+      "files": [],
+      "expectations": [
+        "ConfigMap contains service.slack config referencing $slack-token",
+        "ConfigMap contains service.github config with appID and installationID referencing secret keys",
+        "Secret contains slack-token key",
+        "Secret contains github-app-privateKey or similar key for GitHub App authentication",
+        "Slack template uses blocks array with section type and mrkdwn (not legacy attachments format)",
+        "Slack template includes an actions block with a button element linking to argocdUrl",
+        "GitHub trigger uses oncePer referencing app.status.operationState.syncResult.revision",
+        "GitHub trigger condition maps operation phases to commit status states (success/failure/pending)",
+        "Application annotation for Slack: notifications.argoproj.io/subscribe.on-sync-failed.slack",
+        "Application annotation for GitHub: notifications.argoproj.io/subscribe referencing the github trigger and service"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I'm deploying Argo CD on OpenShift using the OpenShift GitOps Operator. Generate: 1) An ArgoCD custom resource (the operator CRD, not raw Argo CD manifests) in the openshift-gitops namespace with HA disabled, Route enabled with reencrypt TLS, OpenShift OAuth via Dex, RBAC that maps 'cluster-admins' group to admin role with default readonly policy, resource exclusions for Tekton TaskRun/PipelineRun and OLM InstallPlan, and notifications enabled. 2) A namespace-scoped ArgoCD instance for the 'platform-team' namespace with a Route and sourceNamespaces set. 3) Show the label needed on a target namespace 'platform-staging' so the namespace-scoped instance can manage it. 4) Explain what happens differently on OpenShift vs vanilla Kubernetes regarding SCCs when running Argo Rollouts pods.",
+      "expected_output": "ArgoCD CRD (argoproj.io/v1beta1) with OpenShift-specific configuration, namespace-scoped instance, managed-by label, and SCC explanation.",
+      "files": [],
+      "expectations": [
+        "Uses apiVersion argoproj.io/v1beta1 kind ArgoCD (not v1alpha1, not raw Deployment manifests)",
+        "Cluster-scoped instance in openshift-gitops namespace (not argocd)",
+        "spec.server.route.enabled true with tls.termination reencrypt",
+        "spec.dex.openShiftOAuth true for OAuth integration",
+        "RBAC policy maps cluster-admins to role:admin",
+        "RBAC defaultPolicy is role:readonly",
+        "resourceExclusions includes tekton.dev TaskRun and PipelineRun",
+        "resourceExclusions includes operators.coreos.com InstallPlan",
+        "spec.notifications.enabled true",
+        "Namespace-scoped instance in platform-team namespace with route and sourceNamespaces",
+        "Target namespace label argocd.argoproj.io/managed-by pointing to the instance namespace",
+        "Explains that OpenShift uses SecurityContextConstraints (SCCs) instead of PodSecurityPolicies and Rollout pods need appropriate SCC bindings"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "I need to set up Argo CD for a multi-tenant platform where 3 teams (frontend, backend, data) each manage their own Applications in their own namespaces. I want a single Argo CD instance, not separate instances per team. Each team should only be able to deploy to their own namespaces and access their own Git repos. The frontend team uses namespace 'team-frontend-apps', the backend team uses 'team-backend-apps', and the data team uses 'team-data-apps'. Generate: 1) The argocd-cmd-params-cm ConfigMap change to enable this, 2) An AppProject for the frontend team that restricts them to their namespace, repos matching 'https://github.com/org/frontend-*', and only allows Deployments, Services, ConfigMaps, and Ingresses (no cluster-scoped resources), 3) A sample Application in the team-frontend-apps namespace referencing the project, 4) Show the RBAC policy that allows the 'frontend-devs' SSO group to get/sync apps in their project and namespace only.",
+      "expected_output": "ConfigMap with application.namespaces, AppProject with sourceNamespaces restricting to team namespace, Application in non-argocd namespace, and RBAC with three-part <project>/<namespace>/<app> syntax.",
+      "files": [],
+      "expectations": [
+        "ConfigMap argocd-cmd-params-cm with data.application.namespaces listing team namespaces",
+        "AppProject has spec.sourceNamespaces containing team-frontend-apps",
+        "AppProject has sourceRepos restricted to https://github.com/org/frontend-*",
+        "AppProject has destinations restricted to frontend team namespaces only",
+        "AppProject has clusterResourceWhitelist that is empty or absent (no cluster-scoped resources)",
+        "AppProject has namespaceResourceWhitelist listing only Deployment, Service, ConfigMap, Ingress",
+        "Sample Application metadata.namespace is team-frontend-apps (NOT argocd)",
+        "Application spec.project references the frontend team project",
+        "RBAC policy uses three-part syntax: project/namespace/app (not legacy two-part)",
+        "RBAC policy scopes frontend-devs to only their project and namespace",
+        "Does NOT suggest running multiple Argo CD instances — uses single instance pattern",
+        "Mentions switching resource tracking to annotation or annotation+label for long composite names"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "We have 200 edge clusters behind restrictive firewalls where the control plane cannot reach the cluster API servers. We need GitOps on every cluster with centralized observability. Each edge cluster should be fully autonomous — if it loses connectivity to the control plane, it must continue reconciling. When connected, Application status should sync back to the control plane for monitoring. Describe the architecture and components needed. What is the recommended approach? Generate a high-level deployment plan with the components on the control plane cluster vs each edge cluster.",
+      "expected_output": "Description of argocd-agent with principal on control plane and agent on each workload cluster, autonomous mode, fully autonomous pattern with local Argo CD stack, and the communication model.",
+      "files": [],
+      "expectations": [
+        "Recommends argocd-agent (not traditional multi-cluster Argo CD)",
+        "Describes the principal component running on the control plane",
+        "Describes the agent component running on each edge/workload cluster",
+        "Specifies autonomous mode (not managed mode) for edge clusters",
+        "Recommends the fully autonomous pattern with local Argo CD stack (application-controller + repo-server + redis) on each edge cluster",
+        "Explains that agents initiate connections outbound to the principal (not control plane reaching into clusters)",
+        "Mentions mTLS or certificate-based authentication between agent and principal",
+        "Explains that edge clusters continue reconciling independently during connectivity loss",
+        "States that Application status syncs back to control plane for observability when connected",
+        "Does NOT suggest storing cluster credentials on the control plane"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "I want to set up environment promotion for my app across dev, staging, and production using gitops-promoter. The app repo is on GitHub (org: acme-corp, repo: payments). I want automatic promotion from dev to staging (gated on Argo CD app health), but manual approval for production (gated on both app health and a performance-test check). Also add a security-scan proposed commit status that must pass before merging into any environment. Generate all the resources needed: ScmProvider, GitRepository, PromotionStrategy, and an ArgoCD CommitStatus to report app health. Use a GitHub App for authentication.",
+      "expected_output": "Complete gitops-promoter setup with ScmProvider (GitHub App), GitRepository, PromotionStrategy with 3 environments and commit status gating, and ArgocdCommitStatus for health reporting.",
+      "files": [],
+      "expectations": [
+        "Uses apiVersion promoter.argoproj.io/v1alpha1 for all promoter CRDs",
+        "ScmProvider with github field containing appID and installationID",
+        "ScmProvider references a Secret for githubAppPrivateKey",
+        "GitRepository with github field containing owner: acme-corp and name: payments",
+        "GitRepository references the ScmProvider via scmProviderRef",
+        "PromotionStrategy with 3 environments: environment/development, environment/staging, environment/production",
+        "Production environment has autoMerge: false for manual approval",
+        "Dev and staging have autoMerge: true (explicit or default)",
+        "activeCommitStatuses includes argocd-app-health at the strategy level",
+        "Production environment has additional activeCommitStatus for performance-test",
+        "proposedCommitStatuses includes security-scan at the strategy level",
+        "ArgocdCommitStatus resource referencing the GitRepository and selecting the app"
+      ]
+    }
+  ]
+}
