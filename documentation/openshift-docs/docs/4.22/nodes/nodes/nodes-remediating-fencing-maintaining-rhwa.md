@@ -1,8 +1,4 @@
-<div wrapper="1" role="_abstract">
-
 When node-level failures occur, due to issues such as kernel hangs or network issues, it is important to isolate the node, known as *fencing*, before initiating recovery of the workload, known as *remediation*, and then you can attempt to recover the node.
-
-</div>
 
 During node failures, the work required from the cluster does not decrease and workloads from affected nodes need to be restarted somewhere. Failures affecting these workloads risk data loss, corruption, or both.
 

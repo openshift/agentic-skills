@@ -1,8 +1,4 @@
-<div wrapper="1" role="_abstract">
-
 Use the `defaultCPUModel` setting in the `HyperConverged` custom resource (CR) to define a cluster-wide default CPU model.
-
-</div>
 
 The virtual machine (VM) CPU model depends on the availability of CPU models within the VM and the cluster.
 
@@ -20,34 +16,16 @@ The virtual machine (VM) CPU model depends on the availability of CPU models wit
 
 # Configuring the default CPU model
 
-<div wrapper="1" role="_abstract">
-
 You can configure the `defaultCPUModel` by updating the `HyperConverged` custom resource (CR). You can change the `defaultCPUModel` while OpenShift Virtualization is running.
-
-</div>
 
 > [!NOTE]
 > The `defaultCPUModel` is case sensitive.
 
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Install the OpenShift CLI (oc).
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Open the `HyperConverged` CR by running the following command:
 
@@ -68,5 +46,3 @@ Procedure
     ```
 
 3.  Apply the YAML file to your cluster.
-
-</div>

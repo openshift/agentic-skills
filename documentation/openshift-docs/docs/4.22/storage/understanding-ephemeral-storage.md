@@ -1,16 +1,8 @@
-<div wrapper="1" role="_abstract">
-
 To manage temporary data that exists only for the duration of a workload, review the properties of ephemeral storage.
-
-</div>
 
 # Overview of ephemeral storage
 
-<div wrapper="1" role="_abstract">
-
 To manage local storage for stateless applications, use ephemeral storage. Ephemeral storage is designed for the transient nature of pods and containers. You can use this feature to handle operations that require storage only for the duration of the lifecycle for the workload. Both developers and administrators can use the feature.
-
-</div>
 
 In addition to persistent storage, pods and containers can require ephemeral or transient local storage for their operation. The lifetime of this ephemeral storage does not extend beyond the life of the individual pod, and this ephemeral storage cannot be shared across pods.
 
@@ -30,11 +22,7 @@ While the ephemeral storage framework allows administrators and developers to be
 
 # Types of ephemeral storage
 
-<div wrapper="1" role="_abstract">
-
 To provision ephemeral local storage, you can create the primary partition by using either root or runtime methods. This storage is always made available in the primary partition, providing temporary space for your workloads.
-
-</div>
 
 ## Root
 
@@ -46,11 +34,7 @@ This is an optional partition that runtimes can use for overlay file systems. Op
 
 # Ephemeral storage management
 
-<div wrapper="1" role="_abstract">
-
 Cluster administrators can manage ephemeral storage within a project by setting quotas that define the limit ranges and number of requests for ephemeral storage across all pods in a non-terminal state. Developers can also set requests and limits on this compute resource at the pod and container level.
-
-</div>
 
 You can manage local ephemeral storage by specifying requests and limits. Each container in a pod can specify the following:
 
@@ -81,13 +65,7 @@ The following example configuration file shows a pod with two containers:
 
   - Therefore, the pod has a request of 4GiB of local ephemeral storage, and a limit of 8GiB of local ephemeral storage.
 
-<div class="formalpara">
-
-<div class="title">
-
-Example ephemeral storage configuration with quotas and limits
-
-</div>
+**Example ephemeral storage configuration with quotas and limits**
 
 ``` yaml
 apiVersion: v1
@@ -121,8 +99,6 @@ spec:
       emptyDir: {}
 ```
 
-</div>
-
 - Container request for local ephemeral storage.
 
 - Container limit for local ephemeral storage.
@@ -141,21 +117,11 @@ The settings in the pod spec affect both how the scheduler makes a decision abou
 
 # Monitoring ephemeral storage
 
-<div wrapper="1" role="_abstract">
-
 To monitor ephemeral storage usage, use the `/bin/df` utility. By using this tool, you can track disk space consumption on the volumes where ephemeral container data resides, specifically `/var/lib/kubelet` and `/var/lib/containers`.
-
-</div>
 
 When you use the `df` command, the available space for only `/var/lib/kubelet` is shown if `/var/lib/containers` is placed on a separate disk by the cluster administrator.
 
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 - To show the human-readable values of used and available space in `/var/lib`, enter the following command:
 
@@ -165,19 +131,9 @@ Procedure
 
   The output shows the ephemeral storage usage in `/var/lib`:
 
-  <div class="formalpara">
-
-  <div class="title">
-
-  Example output
-
-  </div>
+**Example output**
 
   ``` terminal
   Filesystem  Size  Used Avail Use% Mounted on
   /dev/disk/by-partuuid/4cd1448a-01    69G   32G   34G  49% /
   ```
-
-  </div>
-
-</div>

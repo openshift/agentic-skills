@@ -1,0 +1,4 @@
+policy_name: scanner-policy
+disabled_rules:
+  - CROSS_SKILL_DATA_RELAY
+  - CROSS_SKILL_SHARED_URL

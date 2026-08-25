@@ -1,26 +1,12 @@
-<div wrapper="1" role="_abstract">
-
 To automate the provisioning of AWS Load Balancers for your applications, configure the AWS Load Balancer Operator. This setup ensures that the Operator correctly manages ingress resources and external access to your cluster.
-
-</div>
 
 # Trusting the certificate authority of the cluster-wide proxy
 
-<div wrapper="1" role="_abstract">
-
 You can configure the cluster-wide proxy in the AWS Load Balancer Operator. After configuring the cluster-wide proxy, Operator Lifecycle Manager (OLM) automatically updates all the deployments of the Operators with the environment variables.
-
-</div>
 
 Environment variables include `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY`. These variables are populated to the managed controller by the AWS Load Balancer Operator.
 
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Create the config map to contain the certificate authority (CA) bundle in the `aws-load-balancer-operator` namespace by running the following command:
 
@@ -46,20 +32,12 @@ Procedure
     $ oc -n aws-load-balancer-operator exec deploy/aws-load-balancer-operator-controller-manager -c manager -- bash -c "ls -l /etc/pki/tls/certs/albo-tls-ca-bundle.crt; printenv TRUSTED_CA_CONFIGMAP_NAME"
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     -rw-r--r--. 1 root 1000690000 5875 Jan 11 12:25 /etc/pki/tls/certs/albo-tls-ca-bundle.crt
     trusted-ca
     ```
-
-    </div>
 
 5.  Optional: Restart deployment of the AWS Load Balancer Operator every time the config map changes by running the following command:
 
@@ -67,57 +45,23 @@ Procedure
     $ oc -n aws-load-balancer-operator rollout restart deployment/aws-load-balancer-operator-controller-manager
     ```
 
-</div>
-
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Certificate injection using Operators](../../../networking/configuring_network_settings/configuring-a-custom-pki.xml#certificate-injection-using-operators_configuring-a-custom-pki)
 
-</div>
-
 # Adding TLS termination on the AWS Load Balancer
-
-<div wrapper="1" role="_abstract">
 
 You can route the traffic for the domain to pods of a service and add TLS termination on the AWS Load Balancer.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the OpenShift CLI (`oc`).
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Create a YAML file that defines the `AWSLoadBalancerController` resource:
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example `add-tls-termination-albc.yaml` file
-
-    </div>
+**Example `add-tls-termination-albc.yaml` file**
 
     ``` yaml
     apiVersion: networking.olm.openshift.io/v1
@@ -130,8 +74,6 @@ Procedure
     # ...
     ```
 
-    </div>
-
     where:
 
     `spec.ingressClass`
@@ -139,13 +81,7 @@ Procedure
 
 2.  Create a YAML file that defines the `Ingress` resource:
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example `add-tls-termination-ingress.yaml` file
-
-    </div>
+**Example `add-tls-termination-ingress.yaml` file**
 
     ``` yaml
     apiVersion: networking.k8s.io/v1
@@ -171,8 +107,6 @@ Procedure
     # ...
     ```
 
-    </div>
-
     where:
 
     `metadata.name`
@@ -193,35 +127,15 @@ Procedure
     `backend.service`
     Specifies the service for traffic routing.
 
-</div>
-
 # Creating multiple ingress resources through a single AWS Load Balancer
-
-<div wrapper="1" role="_abstract">
 
 To route traffic to different services within a single domain, configure multiple ingress resources on a single AWS Load Balancer. This setup allows each resource to provide different endpoints while sharing the same load balancing infrastructure.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the OpenShift CLI (`oc`).
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Create an `IngressClassParams` resource YAML file, for example, `sample-single-lb-params.yaml`, as follows:
 
@@ -421,28 +335,14 @@ Procedure
     $ oc create -f sample-multiple-ingress.yaml
     ```
 
-</div>
-
 # AWS Load Balancer Operator logs
-
-<div wrapper="1" role="_abstract">
 
 To troubleshoot the AWS Load Balancer Operator, view the logs using the `oc logs` command. By viewing the logs, you can diagnose issues and monitor the activity of the Operator.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 - View the logs of the AWS Load Balancer Operator by running the following command:
 
   ``` terminal
   $ oc logs -n aws-load-balancer-operator deployment/aws-load-balancer-operator-controller-manager -c manager
   ```
-
-</div>

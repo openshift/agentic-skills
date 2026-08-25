@@ -1,7 +1,6 @@
 ---
 name: openshift-docs
 description: Search and read OpenShift Container Platform documentation in markdown format. Use when the user asks about OpenShift features, configuration, installation, troubleshooting, or any OCP-specific topic — including operators, routes, services, oc, RBAC, networking, storage, or cluster administration.
-allowed-tools: Bash(cat:*,grep:*,find:*,ls:*)
 ---
 
 # OpenShift Documentation

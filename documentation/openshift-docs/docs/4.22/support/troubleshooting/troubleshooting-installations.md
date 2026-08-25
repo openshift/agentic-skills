@@ -1,16 +1,8 @@
-<div wrapper="1" role="_abstract">
-
 Use the following sections to troubleshoot OpenShift Container Platform installation issues.
-
-</div>
 
 # Determining where installation issues occur
 
-<div wrapper="1" role="_abstract">
-
 When troubleshooting OpenShift Container Platform installation issues, you can monitor installation logs to determine at which stage issues occur. Then, retrieve diagnostic data relevant to that stage.
-
-</div>
 
 OpenShift Container Platform installation proceeds through the following stages:
 
@@ -40,11 +32,7 @@ OpenShift Container Platform installation proceeds through the following stages:
 
 # User-provisioned infrastructure installation considerations
 
-<div wrapper="1" role="_abstract">
-
 The default installation method uses installer-provisioned infrastructure. With installer-provisioned infrastructure clusters, OpenShift Container Platform manages all aspects of the cluster, including the operating system itself. If possible, use this feature to avoid having to provision and maintain the cluster infrastructure.
-
-</div>
 
 You can alternatively install OpenShift Container Platform 4.17 on infrastructure that you provide. If you use this installation method, follow user-provisioned infrastructure installation documentation carefully. Additionally, review the following considerations before the installation:
 
@@ -67,19 +55,9 @@ You can alternatively install OpenShift Container Platform 4.17 on infrastructur
 
 # Checking a load balancer configuration before OpenShift Container Platform installation
 
-<div wrapper="1" role="_abstract">
-
 Check your load balancer configuration prior to starting an OpenShift Container Platform installation.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have configured an external load balancer of your choosing, in preparation for an OpenShift Container Platform installation. The following example is based on a Red Hat Enterprise Linux (RHEL) host using HAProxy to provide load balancing services to a cluster.
 
@@ -87,15 +65,7 @@ Prerequisites
 
 - You have SSH access to your load balancer.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Check that the `haproxy` systemd service is active:
 
@@ -126,35 +96,15 @@ Procedure
     $ dig <wildcard_fqdn> @<dns_server>
     ```
 
-</div>
-
 # Specifying OpenShift Container Platform installer log levels
-
-<div wrapper="1" role="_abstract">
 
 By default, the OpenShift Container Platform installer log level is set to `info`. If more detailed logging is required when diagnosing a failed OpenShift Container Platform installation, you can increase the `openshift-install` log level to `debug` when starting the installation again.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the installation host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 - Set the installation log level to `debug` when initiating the installation:
 
@@ -166,15 +116,9 @@ Procedure
 
 - Possible log levels include `info`, `warn`, `error,` and `debug`.
 
-</div>
-
 # Troubleshooting openshift-install command issues
 
-<div wrapper="1" role="_abstract">
-
 If you experience issues running the `openshift-install` command, check the following:
-
-</div>
 
 - The installation has been initiated within 24 hours of Ignition configuration file creation. The Ignition files are created when the following command is run:
 
@@ -186,19 +130,9 @@ If you experience issues running the `openshift-install` command, check the foll
 
 # Monitoring installation progress
 
-<div wrapper="1" role="_abstract">
-
 You can monitor high-level installation, bootstrap, and control plane logs as an OpenShift Container Platform installation progresses. This provides greater visibility into how an installation progresses and helps identify the stage at which an installation failure occurs.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the cluster as a user with the `cluster-admin` cluster role.
 
@@ -211,15 +145,7 @@ Prerequisites
   > [!NOTE]
   > The initial `kubeadmin` password can be found in `<install_directory>/auth/kubeadmin-password` on the installation host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Watch the installation log as the installation progresses:
 
@@ -264,23 +190,11 @@ Procedure
         $ ssh core@master-N.cluster_name.sub_domain.domain journalctl -b -f -u crio.service
         ```
 
-</div>
-
 # Gathering bootstrap node diagnostic data
-
-<div wrapper="1" role="_abstract">
 
 When experiencing bootstrap-related issues, you can gather `bootkube.service` `journald` unit logs and container logs from the bootstrap node.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have SSH access to your bootstrap node.
 
@@ -288,15 +202,7 @@ Prerequisites
 
 - If you are hosting Ignition configuration files by using an HTTP server, you must have the HTTP server’s fully qualified domain name and the port number. You must also have SSH access to the HTTP host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  If you have access to the bootstrap node’s console, monitor the console until the node reaches the login prompt.
 
@@ -353,23 +259,11 @@ Procedure
 
     - The load balancer proxies port 6443 connections to bootstrap and control plane nodes. Ensure that the proxy configuration meets OpenShift Container Platform installation requirements.
 
-</div>
-
 # Investigating control plane node installation issues
-
-<div wrapper="1" role="_abstract">
 
 If you experience control plane node installation issues, determine the control plane node OpenShift Container Platform software defined network (SDN), and network Operator status. Collect `kubelet.service`, `crio.service` journald unit logs, and control plane node container logs for visibility into control plane node agent, CRI-O container runtime, and pod activity.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the cluster as a user with the `cluster-admin` role.
 
@@ -384,15 +278,7 @@ Prerequisites
   > [!NOTE]
   > The initial `kubeadmin` password can be found in `<install_directory>/auth/kubeadmin-password` on the installation host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  If you have access to the console for the control plane node, monitor the console until the node reaches the login prompt. During the installation, Ignition log messages are output to the console.
 
@@ -596,23 +482,11 @@ Procedure
         $ openssl s_client -connect api-int.<cluster_name>:22623 | openssl x509 -noout -text
         ```
 
-</div>
-
 # Investigating etcd installation issues
-
-<div wrapper="1" role="_abstract">
 
 If you experience etcd issues during installation, you can check etcd pod status and collect etcd pod logs. You can also verify etcd DNS records and check DNS availability on control plane nodes.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the cluster as a user with the `cluster-admin` role.
 
@@ -622,15 +496,7 @@ Prerequisites
 
 - You have the fully qualified domain names of the control plane nodes.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Check the status of etcd pods.
 
@@ -703,23 +569,11 @@ Procedure
 
 4.  Validate primary and secondary DNS server connectivity from control plane nodes.
 
-</div>
-
 # Investigating control plane node kubelet and API server issues
-
-<div wrapper="1" role="_abstract">
 
 To investigate control plane node kubelet and API server issues during installation, check DNS, DHCP, and load balancer functionality. Also, verify that certificates have not expired.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the cluster as a user with the `cluster-admin` role.
 
@@ -729,15 +583,7 @@ Prerequisites
 
 - You have the fully qualified domain names of the control plane nodes.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Verify that the API server’s DNS record directs the kubelet on control plane nodes to `https://api-int.<cluster_name>.<base_domain>:6443`. Ensure that the record references the load balancer.
 
@@ -776,23 +622,11 @@ Procedure
         $ ssh core@<master-node>.<cluster_name>.<base_domain> journalctl -b -f -u kubelet.service  | grep -is 'x509: certificate has expired'
         ```
 
-</div>
-
 # Investigating worker node installation issues
-
-<div wrapper="1" role="_abstract">
 
 If you experience worker node installation issues, you can review the worker node status. Collect `kubelet.service`, `crio.service` journald unit logs and the worker node container logs for visibility into the worker node agent, CRI-O container runtime and pod activity. Additionally, you can check the Ignition file and Machine API Operator functionality. If worker node postinstallation configuration fails, check Machine Config Operator (MCO) and DNS functionality. You can also verify system clock synchronization between the bootstrap, master, and worker nodes, and validate certificates.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the cluster as a user with the `cluster-admin` role.
 
@@ -807,15 +641,7 @@ Prerequisites
   > [!NOTE]
   > The initial `kubeadmin` password can be found in `<install_directory>/auth/kubeadmin-password` on the installation host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  If you have access to the worker node’s console, monitor the console until the node reaches the login prompt. During the installation, Ignition log messages are output to the console.
 
@@ -999,37 +825,17 @@ Procedure
         $ openssl s_client -connect api-int.<cluster_name>:22623 | openssl x509 -noout -text
         ```
 
-</div>
-
 # Querying Operator status after installation
-
-<div wrapper="1" role="_abstract">
 
 You can check Operator status at the end of an installation. Retrieve diagnostic data for Operators that do not become available. Review logs for any Operator pods that are listed as `Pending` or have an error status. Validate base images used by problematic pods.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have access to the cluster as a user with the `cluster-admin` role.
 
 - You have installed the OpenShift CLI (`oc`).
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Check that cluster Operators are all available at the end of an installation.
 
@@ -1045,13 +851,7 @@ Procedure
         $ oc get csr
         ```
 
-        <div class="formalpara">
-
-        <div class="title">
-
-        Example output
-
-        </div>
+**Example output**
 
         ``` terminal
         NAME        AGE     REQUESTOR                                                                   CONDITION
@@ -1061,8 +861,6 @@ Procedure
         csr-c57lv   5m26s   system:node:ip-10-0-95-157.us-east-2.compute.internal                       Pending
         ...
         ```
-
-        </div>
 
         - In this example, `csr-8b2br` represents a client request CSR.
 
@@ -1128,26 +926,14 @@ Procedure
         $ oc adm release info <image_path>:<tag> --commits
         ```
 
-</div>
-
 # Gathering logs from a failed installation
 
-<div wrapper="1" role="_abstract">
-
 If you gave an SSH key to your installation program, you can gather data about your failed installation.
-
-</div>
 
 > [!NOTE]
 > You use a different command to gather logs about an unsuccessful installation than to gather logs from a running cluster. If you must gather logs from a running cluster, use the `oc adm must-gather` command.
 
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Your OpenShift Container Platform installation failed before the bootstrap process finished. The bootstrap node is running and accessible through SSH.
 
@@ -1155,15 +941,7 @@ Prerequisites
 
 - If you tried to install a cluster on infrastructure that you provisioned, you must have the fully qualified domain names of the bootstrap and control plane nodes.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Generate the commands that are required to obtain the installation logs from the bootstrap and control plane machines:
 
@@ -1198,24 +976,14 @@ Procedure
         > [!NOTE]
         > A default cluster contains three control plane machines. List all of your control plane machines as shown, no matter how many your cluster uses.
 
-      <div class="formalpara">
-
-      <div class="title">
-
-      Example output
-
-      </div>
+**Example output**
 
       ``` terminal
       INFO Pulling debug logs from the bootstrap machine
       INFO Bootstrap gather logs captured here "<installation_directory>/log-bundle-<timestamp>.tar.gz"
       ```
 
-      </div>
-
       If you open a Red Hat support case about your installation failure, include the compressed logs in the case.
-
-</div>
 
 # Additional resources
 

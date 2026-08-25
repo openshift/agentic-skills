@@ -1,19 +1,11 @@
-<div wrapper="1" role="_abstract">
-
 Apply autoscaling to an OpenShift Container Platform cluster to automatically adjust the size of the cluster to meet deployment needs. You can deploy a cluster autoscaler and then deploy machine autoscalers for each machine type in your cluster. After you configure the cluster autoscaler, you must configure at least one machine autoscaler.
-
-</div>
 
 > [!IMPORTANT]
 > You can configure the cluster autoscaler only in clusters where the Machine API Operator is operational.
 
 # About the cluster autoscaler
 
-<div wrapper="1" role="_abstract">
-
 The cluster autoscaler adjusts the size of an OpenShift Container Platform cluster to meet its current deployment needs. It uses declarative, Kubernetes-style arguments to provide infrastructure management that does not rely on objects of a specific cloud provider. The cluster autoscaler has a cluster scope, and is not associated with a particular namespace.
-
-</div>
 
 The cluster autoscaler increases the size of the cluster when there are pods that fail to schedule on any of the current worker nodes due to insufficient resources or when another node is necessary to meet deployment needs. The cluster autoscaler does not increase the cluster resources beyond the limits that you specify.
 
@@ -80,11 +72,7 @@ Pods with priority lower than the cutoff value do not cause the cluster to scale
 
 ## Cluster autoscaler resource definition
 
-<div wrapper="1" role="_abstract">
-
 This `ClusterAutoscaler` resource definition shows the parameters and sample values for the cluster autoscaler.
-
-</div>
 
 > [!NOTE]
 > When you change the configuration of an existing cluster autoscaler, it restarts.
@@ -248,19 +236,9 @@ spec:
 
 ## Configuring a priority expander for the cluster autoscaler
 
-<div wrapper="1" role="_abstract">
-
 Configure a priority expander to control which machine set expands when the cluster autoscaler increases the size of the cluster. You can create a priority expander config map by listing priority values and regular expressions that define machine sets.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have deployed an OpenShift Container Platform cluster that uses the Machine API.
 
@@ -268,15 +246,7 @@ Prerequisites
 
 - You have installed the OpenShift CLI (`oc`).
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  List the compute machine sets on your cluster by running the following command:
 
@@ -284,13 +254,7 @@ Procedure
     $ oc get machinesets.machine.openshift.io
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     NAME                                        DESIRED   CURRENT   READY   AVAILABLE   AGE
@@ -303,21 +267,13 @@ Procedure
     prod-02-agl030519-vplxk-worker-us-east-1c   1         1         1       1           33m
     ```
 
-    </div>
-
 2.  Using regular expressions, construct one or more patterns that match the name of any compute machine set that you want to set a priority level for.
 
     For example, use the regular expression pattern `*fast*` to match any compute machine set that includes the string `fast` in its name.
 
 3.  Create a `cluster-autoscaler-priority-expander.yml` YAML file that defines a config map similar to the following:
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example priority expander config map
-
-    </div>
+**Example priority expander config map**
 
     ``` yaml
     apiVersion: v1
@@ -334,8 +290,6 @@ Procedure
           - .*prod.*
     ```
 
-    </div>
-
     Define the priority of your machine sets. The `priorities` values must be positive integers. The cluster autoscaler uses higher-value priorities before lower-value priorities. For each priority level, specify the regular expressions that correspond to the machine sets you want to use.
 
 4.  Create the config map by running the following command:
@@ -345,15 +299,7 @@ Procedure
       --from-file=<location_of_config_map_file>/cluster-autoscaler-priority-expander.yml
     ```
 
-</div>
-
-<div>
-
-<div class="title">
-
-Verification
-
-</div>
+**Verification**
 
 - Review the config map by running the following command:
 
@@ -361,47 +307,19 @@ Verification
   $ oc get configmaps cluster-autoscaler-priority-expander -o yaml
   ```
 
-</div>
-
-<div>
-
-<div class="title">
-
-Next steps
-
-</div>
+**Next steps**
 
 - To use the priority expander, ensure that the `ClusterAutoscaler` resource definition is configured to use the `expanders: ["Priority"]` parameter.
 
-</div>
-
 ## Labeling GPU machine sets for the cluster autoscaler
-
-<div wrapper="1" role="_abstract">
 
 Label your machine sets to indicate which machines the cluster autoscaler can use for GPU-enabled nodes. Applying the accelerator label helps ensure that the autoscaler deploys the correct resources for your GPU workloads.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Your cluster uses a cluster autoscaler.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 - On the machine set that you want to create machines for the cluster autoscaler to use to deploy GPU-enabled nodes, add a `cluster-api/accelerator` label:
 
@@ -426,23 +344,11 @@ Procedure
   > [!NOTE]
   > You must specify the value of this label for the `spec.resourceLimits.gpus.type` parameter in your `ClusterAutoscaler` CR. For more information, see "Cluster autoscaler resource definition".
 
-</div>
-
 ## Deploying a cluster autoscaler
-
-<div wrapper="1" role="_abstract">
 
 To deploy a cluster autoscaler, you create an instance of the `ClusterAutoscaler` resource.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Create a YAML file for a `ClusterAutoscaler` resource that contains the custom resource definition.
 
@@ -457,26 +363,16 @@ Procedure
     \<filename\>
     Specifies the name of the YAML file you created.
 
-</div>
-
 # About the machine autoscaler
 
-<div wrapper="1" role="_abstract">
-
 The machine autoscaler adjusts the number of Machines in the compute machine sets that you deploy in an OpenShift Container Platform cluster. You can scale both the default `worker` compute machine set and any other compute machine sets that you create. The machine autoscaler makes more Machines when the cluster runs out of resources to support more deployments. Any changes to the values in `MachineAutoscaler` resources, such as the minimum or maximum number of instances, are immediately applied to the compute machine set they target.
-
-</div>
 
 > [!IMPORTANT]
 > You must deploy a machine autoscaler for the cluster autoscaler to scale your machines. The cluster autoscaler uses the annotations on compute machine sets that the machine autoscaler sets to determine the resources that it can scale. If you define a cluster autoscaler without also defining machine autoscalers, the cluster autoscaler will never scale your cluster.
 
 ## Configuring machine autoscalers
 
-<div wrapper="1" role="_abstract">
-
 After you deploy the cluster autoscaler, deploy `MachineAutoscaler` resources that reference the compute machine sets that are used to scale the cluster.
-
-</div>
 
 > [!IMPORTANT]
 > You must deploy at least one `MachineAutoscaler` resource after you deploy the `ClusterAutoscaler` resource.
@@ -486,11 +382,7 @@ After you deploy the cluster autoscaler, deploy `MachineAutoscaler` resources th
 
 ### Machine autoscaler resource definition
 
-<div wrapper="1" role="_abstract">
-
 This `MachineAutoscaler` resource definition shows the parameters and sample values for the machine autoscaler.
-
-</div>
 
 ``` yaml
 apiVersion: "autoscaling.openshift.io/v1beta1"
@@ -534,19 +426,9 @@ The `name` value must match the name of an existing compute machine set, as show
 
 ## Deploying a machine autoscaler
 
-<div wrapper="1" role="_abstract">
-
 To deploy a machine autoscaler, you create an instance of the `MachineAutoscaler` resource.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Create a YAML file for a `MachineAutoscaler` resource that contains the custom resource definition.
 
@@ -561,26 +443,14 @@ Procedure
     \<filename\>
     Specifies the name of the YAML file you created.
 
-</div>
-
 # Disabling a machine autoscaler
 
-<div wrapper="1" role="_abstract">
-
 To disable a machine autoscaler, you delete the corresponding `MachineAutoscaler` custom resource (CR).
-
-</div>
 
 > [!NOTE]
 > Disabling a machine autoscaler does not disable the cluster autoscaler. To disable the cluster autoscaler, follow the instructions in "Disabling the cluster autoscaler".
 
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  List the `MachineAutoscaler` CRs for the cluster by running the following command:
 
@@ -588,21 +458,13 @@ Procedure
     $ oc get MachineAutoscaler -n openshift-machine-api
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     NAME                 REF KIND     REF NAME             MIN   MAX   AGE
     compute-us-east-1a   MachineSet   compute-us-east-1a   1     12    39m
     compute-us-west-1a   MachineSet   compute-us-west-1a   2     4     37m
     ```
-
-    </div>
 
 2.  Optional: Create a YAML file backup of the `MachineAutoscaler` CR by running the following command:
 
@@ -623,29 +485,13 @@ Procedure
     $ oc delete MachineAutoscaler/<machine_autoscaler_name> -n openshift-machine-api
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     machineautoscaler.autoscaling.openshift.io "compute-us-east-1a" deleted
     ```
 
-    </div>
-
-</div>
-
-<div>
-
-<div class="title">
-
-Verification
-
-</div>
+**Verification**
 
 - To verify that the machine autoscaler is disabled, run the following command:
 
@@ -655,38 +501,18 @@ Verification
 
   The disabled machine autoscaler does not appear in the list of machine autoscalers.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Next steps
-
-</div>
+**Next steps**
 
 - If you need to re-enable the machine autoscaler, use the `<machine_autoscaler_name_backup>.yaml` backup file and follow the instructions in "Deploying a machine autoscaler".
 
-</div>
-
 # Disabling the cluster autoscaler
 
-<div wrapper="1" role="_abstract">
-
 To disable the cluster autoscaler, you delete the corresponding `ClusterAutoscaler` resource.
-
-</div>
 
 > [!NOTE]
 > Disabling the cluster autoscaler disables autoscaling on the cluster, even if the cluster has existing machine autoscalers.
 
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  List the `ClusterAutoscaler` resource for the cluster by running the following command:
 
@@ -694,20 +520,12 @@ Procedure
     $ oc get ClusterAutoscaler
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     NAME      AGE
     default   42m
     ```
-
-    </div>
 
 2.  Optional: Create a YAML file backup of the `ClusterAutoscaler` CR by running the following command:
 
@@ -727,29 +545,13 @@ Procedure
     $ oc delete ClusterAutoscaler/default
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     clusterautoscaler.autoscaling.openshift.io "default" deleted
     ```
 
-    </div>
-
-</div>
-
-<div>
-
-<div class="title">
-
-Verification
-
-</div>
+**Verification**
 
 - To verify that the cluster autoscaler is disabled, run the following command:
 
@@ -757,35 +559,17 @@ Verification
   $ oc get ClusterAutoscaler
   ```
 
-  <div class="formalpara">
-
-  <div class="title">
-
-  Expected output
-
-  </div>
+**Expected output**
 
   ``` terminal
   No resources found
   ```
 
-  </div>
-
-</div>
-
-<div>
-
-<div class="title">
-
-Next steps
-
-</div>
+**Next steps**
 
 - Disabling the cluster autoscaler by deleting the `ClusterAutoscaler` CR prevents the cluster from autoscaling but does not delete any existing machine autoscalers on the cluster. To clean up unneeded machine autoscalers, see "Disabling a machine autoscaler".
 
 - If you need to re-enable the cluster autoscaler, use the `<cluster_autoscaler_name_backup>.yaml` backup file and follow the instructions in "Deploying a cluster autoscaler".
-
-</div>
 
 # Additional resources
 

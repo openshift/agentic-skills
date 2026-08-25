@@ -1,8 +1,4 @@
-<div wrapper="1" role="_abstract">
-
 To install, update, and uninstall CLI plugins in OpenShift Container Platform, you can set up and configure the CLI Manager Operator.
-
-</div>
 
 > [!IMPORTANT]
 > Using the CLI Manager Operator to install and manage plugins for the OpenShift CLI is a Technology Preview feature only. Technology Preview features are not supported with Red Hat production service level agreements (SLAs) and might not be functionally complete. Red Hat does not recommend using them in production. These features provide early access to upcoming product features, enabling customers to test functionality and provide feedback during the development process.
@@ -11,19 +7,9 @@ To install, update, and uninstall CLI plugins in OpenShift Container Platform, y
 
 # Installing CLI plugins with the CLI Manager Operator
 
-<div wrapper="1" role="_abstract">
-
 You can install CLI plugins with the CLI Manager Operator to extend OpenShift CLI functionality in both connected and disconnected environments.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed Krew by following the [installation procedure](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) in the Krew documentation.
 
@@ -33,15 +19,7 @@ Prerequisites
 
 - You are using OpenShift Container Platform 4.17 or later.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  To list all available plugins, run the following command:
 
@@ -67,23 +45,11 @@ Procedure
     $ oc krew list
     ```
 
-</div>
-
 # Upgrading a plugin with the CLI Manager Operator
-
-<div wrapper="1" role="_abstract">
 
 You can upgrade a CLI plugin to a newer version with the CLI Manager Operator by directly editing the plugin’s resource YAML file.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You are logged in to OpenShift Container Platform as a user with the `cluster-admin` role.
 
@@ -91,15 +57,7 @@ Prerequisites
 
 - The plugin you are upgrading is installed.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Using the CLI, enter the following command:
 
@@ -109,13 +67,7 @@ Procedure
 
 2.  Edit the YAML file to include the new specifications for your plugin.
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example YAML file to upgrade a plugin
-
-    </div>
+**Example YAML file to upgrade a plugin**
 
     ``` yaml
     apiVersion: config.openshift.io/v1alpha1
@@ -137,8 +89,6 @@ Procedure
       version: <version>
     ```
 
-    </div>
-
     where:
 
     `<plugin_name>`
@@ -158,23 +108,11 @@ Procedure
 
 3.  Save the file.
 
-</div>
-
 # Updating CLI plugins with the CLI Manager Operator
-
-<div wrapper="1" role="_abstract">
 
 You can update a plugin that was installed for the OpenShift CLI (`oc`) with the CLI Manager Operator and Krew to keep your plugins current with the latest features.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed Krew by following the [installation procedure](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) in the Krew documentation.
 
@@ -186,15 +124,7 @@ Prerequisites
 
 - The plugin you are updating is already installed.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 - To update a single plugin, run the following command:
 
@@ -208,42 +138,20 @@ Procedure
   $ oc krew upgrade
   ```
 
-</div>
-
 # Uninstalling a CLI plugin with the CLI Manager Operator
-
-<div wrapper="1" role="_abstract">
 
 You can uninstall a plugin that was installed for the OpenShift CLI (`oc`) with the CLI Manager Operator.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed Krew by following the [installation procedure](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) in the Krew documentation.
 
 - You have installed a plugin for the OpenShift CLI with the CLI Manager Operator.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 - To uninstall a plugin, run the following command:
 
   ``` terminal
   $ oc krew uninstall <plugin_name>
   ```
-
-</div>

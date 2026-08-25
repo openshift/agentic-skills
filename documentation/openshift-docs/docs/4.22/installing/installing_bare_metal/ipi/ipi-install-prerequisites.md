@@ -60,11 +60,7 @@ Installer-provisioned installation involves a number of hardware node requiremen
 
 # Minimum resource requirements for cluster installation
 
-<div wrapper="1" role="_abstract">
-
 Each created cluster must meet minimum requirements so that the cluster runs as expected.
-
-</div>
 
 | Machine | Operating System | CPU <sup>\[1\]</sup> | RAM | Storage | Input/Output Per Second (IOPS)<sup>\[2\]</sup> |
 |----|----|----|----|----|----|
@@ -74,13 +70,9 @@ Each created cluster must meet minimum requirements so that the cluster runs as 
 
 Minimum resource requirements
 
-<div wrapper="1" role="small">
-
 1.  One CPU is equivalent to one physical core when simultaneous multithreading (SMT), or Hyper-Threading, is not enabled. When enabled, use the following formula to calculate the corresponding ratio: (threads per core × cores) × sockets = CPUs.
 
 2.  OpenShift Container Platform and Kubernetes are sensitive to disk performance, and faster storage is recommended, particularly for etcd on the control plane nodes. Note that on many cloud platforms, storage size and IOPS scale together, so you might need to over-allocate storage volume to obtain sufficient performance.
-
-</div>
 
 > [!NOTE]
 > For OpenShift Container Platform version 4.19, RHCOS is based on RHEL version 9.6, which updates the micro-architecture requirements. The following list contains the minimum instruction set architectures (ISA) that each architecture requires:
@@ -99,11 +91,7 @@ If an instance type for your platform meets the minimum requirements for cluster
 
 # Bare-metal cluster installation requirements for OpenShift Virtualization
 
-<div wrapper="1" role="_abstract">
-
 If you plan to use OpenShift Virtualization on a bare-metal cluster, you must ensure that your cluster is configured correctly during installation. This is because OpenShift Virtualization requires certain settings that cannot be changed after a cluster is installed.
-
-</div>
 
 ## High availability requirements for OpenShift Virtualization
 
@@ -127,13 +115,7 @@ If you plan to use OpenShift Virtualization HA features, you must have three con
 
 If you plan to use Single Root I/O Virtualization (SR-IOV), ensure that your network interface controllers (NICs) are supported by OpenShift Container Platform.
 
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Preparing your cluster for OpenShift Virtualization](../../../virt/install/preparing-cluster-for-virt.xml#preparing-cluster-for-virt)
 
@@ -141,15 +123,9 @@ Additional resources
 
 - [Connecting a virtual machine to an SR-IOV network](../../../virt/vm_networking/virt-connecting-vm-to-sriov.xml#virt-connecting-vm-to-sriov)
 
-</div>
-
 # Firmware requirements for installing with virtual media
 
-<div wrapper="1" role="_abstract">
-
 The installation program for installer-provisioned OpenShift Container Platform clusters depends on the hardware and firmware compatibility with Redfish virtual media. The installation may not succeed if the node firmware is not compatible.
-
-</div>
 
 The following tables list the firmware versions tested and verified to work for installer-provisioned OpenShift Container Platform clusters deployed by using Redfish virtual media.
 
@@ -183,17 +159,9 @@ Firmware compatibility for Cisco UCS hardware with Redfish virtual media
 > [!NOTE]
 > Always confirm that your server supports Red Hat Enterprise Linux CoreOS (RHCOS) on [UCSHCL](https://ucshcltool.cloudapps.cisco.com/public/).
 
-<div class="formalpara" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 [Unable to discover new bare-metal hosts by using the BMC](../../../installing/installing_bare_metal/ipi/ipi-install-troubleshooting.xml#unable-to-discover-new-bare-metal-hosts-using-the-bmc_ipi-install-troubleshooting)
-
-</div>
 
 # NC-SI hardware requirements for bare metal
 
@@ -225,19 +193,11 @@ Compatible Network Interface Cards (NICs) for NC-SI
 > [!NOTE]
 > Verify NC-SI support with vendor documentation, because compatibility depends on BMC, NIC, and firmware configurations. NC-SI NICs require a compatible BMC to enable shared NIC functionality.
 
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Ironic NC-SI Specification](https://specs.openstack.org/openstack/ironic-specs/specs/approved/nc-si.html)
 
 - [DMTF: Network Controller Sideband Interface (NC-SI) Specification](https://www.dmtf.org/sites/default/files/standards/documents/DSP0222_1.1.1.pdf)
-
-</div>
 
 # Network requirements
 
@@ -415,17 +375,9 @@ You can reconfigure the control plane nodes to act as NTP servers on disconnecte
 
 The out-of-band management IP address is on a separate network from the node. To ensure that the out-of-band management can communicate with the provisioner node during installation, the out-of-band management IP address must be granted access to port `6180` on the provisioner node and on the OpenShift Container Platform control plane nodes. TLS port `6183` is required for virtual media installation, for example, by using Redfish.
 
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Using DNS forwarding](../../../networking/networking_operators/dns-operator.xml#nw-dns-forward_dns-operator)
-
-</div>
 
 # Configuring nodes
 
@@ -481,21 +433,13 @@ Secure Boot prevents a node from booting unless it verifies the node is using on
 
 To enable Secure Boot manually, refer to the hardware guide for the node and execute the following:
 
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Boot the node and enter the BIOS menu.
 
 2.  Set the node’s boot mode to `UEFI Enabled`.
 
 3.  Enable Secure Boot.
-
-</div>
 
 > [!IMPORTANT]
 > Red Hat does not support Secure Boot with self-generated keys.
@@ -531,41 +475,19 @@ Prior to the installation of the OpenShift Container Platform cluster, gather th
 
     - Fujitsu (iRMC) IP
 
-<div>
-
-<div class="title">
-
-When using the `provisioning` network
-
-</div>
+**When using the `provisioning` network**
 
 - NIC (`provisioning`) MAC address
 
 - NIC (`baremetal`) MAC address
 
-</div>
-
-<div>
-
-<div class="title">
-
-When omitting the `provisioning` network
-
-</div>
+**When omitting the `provisioning` network**
 
 - NIC (`baremetal`) MAC address
 
-</div>
-
 # Validation checklist for nodes
 
-<div>
-
-<div class="title">
-
-When using the `provisioning` network
-
-</div>
+**When using the `provisioning` network**
 
 - [ ] NIC1 VLAN is configured for the `provisioning` network.
 
@@ -585,15 +507,7 @@ When using the `provisioning` network
 
 - [ ] Required data for installation.
 
-</div>
-
-<div>
-
-<div class="title">
-
-When omitting the `provisioning` network
-
-</div>
+**When omitting the `provisioning` network**
 
 - [ ] NIC1 VLAN is configured for the `baremetal` network.
 
@@ -606,8 +520,6 @@ When omitting the `provisioning` network
 - [ ] (Optional) A separate management network has been created.
 
 - [ ] Required data for installation.
-
-</div>
 
 # Installation overview
 
