@@ -1,4 +1,4 @@
 policy_name: scanner-policy
 disabled_rules:
-  - CROSS_SKILL_DATA_RELAY
-  - CROSS_SKILL_SHARED_URL
+  - CROSS_SKILL_DATA_RELAY # skills don't form a chain. User uses only some of theses skills
+  - CROSS_SKILL_SHARED_URL # external domains such as "access.redhat.com", "kubernetes.io" may appear in multiple skills
