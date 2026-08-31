@@ -1,16 +1,8 @@
-<div wrapper="1" role="_abstract">
-
 You can configure bare-metal hosts directly within OpenShift Container Platform. To provision and manage nodes in a bare-metal cluster, use `Machine` and `MachineSet` custom resources (CRs).
-
-</div>
 
 # About bare metal hosts and nodes
 
-<div wrapper="1" role="_abstract">
-
 To provision a Red Hat Enterprise Linux CoreOS (RHCOS) bare-metal host as a node in your cluster, first create a `MachineSet` custom resource (CR) object that corresponds to bare-metal host hardware.
-
-</div>
 
 Bare-metal host compute machine sets describe infrastructure components specific to your configuration. You apply specific Kubernetes labels to these compute machine sets and then update the infrastructure components to run on only those machines.
 
@@ -18,19 +10,9 @@ When you scale up the relevant `MachineSet` CR that contains a `metal3.io/autosc
 
 # Maintaining bare metal hosts
 
-<div wrapper="1" role="_abstract">
-
 You can maintain the details of the bare metal hosts in your cluster from the OpenShift Container Platform web console.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  From the web console, comlete the following steps:
 
@@ -51,49 +33,21 @@ Procedure
         > [!NOTE]
         > Powering off the host without first moving the daemon set and unmanaged static pods to another node can cause service disruption and loss of data.
 
-</div>
-
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Adding compute machines to bare metal](../machine_management/user_infra/adding-bare-metal-compute-user-infra.xml#adding-bare-metal-compute-user-infra)
 
-</div>
-
 ## Adding a bare metal host to the cluster using the web console
-
-<div wrapper="1" role="_abstract">
 
 You can add bare-metal hosts to the cluster by using the web console.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Install an RHCOS cluster on bare metal.
 
 - Log in as a user with `cluster-admin` privileges.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  In the web console, navigate to **Compute** → **Bare Metal Hosts**.
 
@@ -114,23 +68,11 @@ Procedure
     > [!NOTE]
     > You can also manage the number of bare-metal nodes by using the `oc scale` command and the appropriate bare-metal compute machine set.
 
-</div>
-
 ## Adding a bare-metal host to the cluster using YAML in the web console
-
-<div wrapper="1" role="_abstract">
 
 You can add bare-metal hosts to the cluster in the web console by using a YAML file that describes the bare-metal host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Install a RHCOS compute machine on bare-metal infrastructure for use in the cluster.
 
@@ -138,15 +80,7 @@ Prerequisites
 
 - Create a `Secret` CR for the bare-metal host.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  In the web console, navigate to **Compute** → **Bare Metal Hosts**.
 
@@ -184,35 +118,15 @@ Procedure
     > [!NOTE]
     > You can also manage the number of bare-metal nodes by using the `oc scale` command and the appropriate bare-metal compute machine set.
 
-</div>
-
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Understanding secrets](../nodes/pods/nodes-pods-secrets.xml#nodes-pods-secrets-about_nodes-pods-secrets)
 
-</div>
-
 ## Automatically scaling machines to the number of available bare-metal hosts
-
-<div wrapper="1" role="_abstract">
 
 To automatically create the number of `Machine` objects that matches the number of available `BareMetalHost` objects, add a `metal3.io/autoscale-to-hosts` annotation to the `MachineSet` object.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Install RHCOS bare-metal compute machines for use in the cluster, and create corresponding `BareMetalHost` objects.
 
@@ -220,15 +134,7 @@ Prerequisites
 
 - Log in as a user with `cluster-admin` privileges.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  To configure automatic scaling for a compute machine set, annotate the compute machine set by running the following command:
 
@@ -249,28 +155,16 @@ Procedure
     >
     > - You subsequently change labels or selectors on the `BareMetalHost`.
 
-</div>
-
 ## Removing bare-metal hosts from the provisioner node
 
-<div wrapper="1" role="_abstract">
-
 In certain circumstances, you might want to temporarily remove bare-metal hosts from the provisioner node. For example, to prevent the management of the number of `Machine` objects that matches the number of available `BareMetalHost` objects, add a `baremetalhost.metal3.io/detached` annotation to the `MachineSet` object.
-
-</div>
 
 Consider an example during provisioning when a bare-metal host reboot is triggered by using the OpenShift Container Platform administration console or as a result of a Machine Config Pool update. In this case, OpenShift Container Platform logs into the integrated Dell Remote Access Controller (iDRAC) and issues a delete of the job queue.
 
 > [!NOTE]
 > This annotation has an effect for only `BareMetalHost` objects that are in either `Provisioned`, `ExternallyProvisioned`, or `Ready/Available` states.
 
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Install RHCOS bare-metal compute machines for use in the cluster and create corresponding `BareMetalHost` objects.
 
@@ -278,15 +172,7 @@ Prerequisites
 
 - Log in as a user with `cluster-admin` privileges.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  To configure automatic scaling for a compute machine set, annotate the compute machine set by running the following command:
 
@@ -305,37 +191,17 @@ Procedure
     $ oc annotate machineset <machineset> -n openshift-machine-api 'baremetalhost.metal3.io/detached-'
     ```
 
-</div>
-
-<div role="_additional-resources" role="_additional-resources">
-
-<div class="title">
-
-Additional resources
-
-</div>
+**Additional resources**
 
 - [Expanding the cluster](../installing/installing_bare_metal/bare-metal-expanding-the-cluster.xml#bare-metal-expanding-the-cluster)
 
 - [MachineHealthChecks on bare metal](../machine_management/deploying-machine-health-checks.xml#machine-health-checks-bare-metal_deploying-machine-health-checks)
 
-</div>
-
 ## Powering off bare-metal hosts by using the web console
-
-<div wrapper="1" role="_abstract">
 
 You can power off bare-metal cluster hosts in the web console. Before you power off a host, mark the node as unschedulable and drain all pods and workloads from the node.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed a RHCOS compute machine on bare-metal infrastructure for use in the cluster.
 
@@ -343,15 +209,7 @@ Prerequisites
 
 - You have configured the host to be managed and have added Baseboard Management Console credentials for the cluster host. You can add BMC credentials by applying a `Secret` custom resource (CR) in the cluster or by logging in to the web console and configuring the bare-metal host to be managed.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Navigate to **Nodes** and select the node that you want to power off. Expand the **Actions** menu and select **Mark as unschedulable**.
 
@@ -363,23 +221,11 @@ Procedure
 
 5.  Select **Immediate power off**.
 
-</div>
-
 ## Powering off bare-metal hosts by using the CLI
-
-<div wrapper="1" role="_abstract">
 
 You can power off bare-metal cluster hosts by applying a patch in the cluster by using the OpenShift CLI (`oc`). Before you power off a host, mark the node as unschedulable and drain all pods and workloads from the node.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed a RHCOS compute machine on bare-metal infrastructure for use in the cluster.
 
@@ -387,15 +233,7 @@ Prerequisites
 
 - You have configured the host to be managed and have added Baseboard Management Console credentials for the cluster host. You can add BMC credentials by applying a `Secret` custom resource (CR) in the cluster or by logging in to the web console and configuring the bare-metal host to be managed.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Get the name of the managed bare-metal host by entering the following command:
 
@@ -403,13 +241,7 @@ Procedure
     $ oc get baremetalhosts -n openshift-machine-api -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.provisioning.state}{"\n"}{end}'
     ```
 
-    <div class="formalpara">
-
-    <div class="title">
-
-    Example output
-
-    </div>
+**Example output**
 
     ``` terminal
     master-0.example.com  managed
@@ -419,8 +251,6 @@ Procedure
     worker-1.example.com  managed
     worker-2.example.com  managed
     ```
-
-    </div>
 
 2.  Mark the node as unschedulable by entering the following command:
 
@@ -449,5 +279,3 @@ Procedure
     ``` terminal
     $ oc adm uncordon <bare_metal_host>
     ```
-
-</div>

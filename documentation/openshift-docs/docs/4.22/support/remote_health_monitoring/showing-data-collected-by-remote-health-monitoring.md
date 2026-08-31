@@ -1,38 +1,16 @@
-<div wrapper="1" role="_abstract">
-
 As an administrator, you can review the metrics collected by Telemetry and the Insights Operator.
-
-</div>
 
 # Showing data collected by Telemetry
 
-<div wrapper="1" role="_abstract">
-
 You can view the cluster and components time series data captured by Telemetry.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed the OpenShift Container Platform CLI (`oc`).
 
 - You have access to the cluster as a user with the `cluster-admin` role or the `cluster-monitoring-view` role.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Log in to a cluster.
 
@@ -191,35 +169,15 @@ Procedure
     --data-urlencode 'match[]={__name__="openshift:openshift_network_operator_ipsec_state:info"}'
     ```
 
-</div>
-
 # Showing data collected by the Insights Operator
-
-<div wrapper="1" role="_abstract">
 
 You can review the data that is collected by the Insights Operator.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - Access to the cluster as a user with the `cluster-admin` role.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  Find the name of the currently running pod for the Insights Operator:
 
@@ -234,5 +192,3 @@ Procedure
     ```
 
     The recent Insights Operator archives are now available in the `insights-data` directory.
-
-</div>

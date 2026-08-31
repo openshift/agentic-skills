@@ -327,10 +327,72 @@ def convert_file(
             os.unlink(tmp_xml)
 
 
+_WRAPPER_DIV_RE = re.compile(
+    r'^<div(?:'
+    r'\s+wrapper="1"'            # <div wrapper="1" role="...">
+    r'|\s+class="(?:title|formalpara)"'  # <div class="title"> / <div class="formalpara">
+    r'|\s+role="_additional-resources"'   # <div role="_additional-resources">
+    r'|\s+style="padding-left:\d+px"'    # <div style="padding-left:20px">
+    r')(?:\s[^>]*)?>$'           # optional extra attrs, closing >
+    r'|^<div>$',                 # bare <div> (no attributes)
+    re.MULTILINE,
+)
+
+
+def _strip_wrapper_divs(content: str) -> str:
+    """Remove wrapper div tags while preserving content.
+
+    Uses a line-based state machine: when a wrapper div opening tag is
+    seen, it is removed and a strip-depth counter incremented.  The
+    matching </div> (tracked by depth) is also removed.  Functional
+    divs like <div class="sourceCode"> are left untouched.
+
+    Title divs have their content converted to bold (**text**).
+    """
+    lines = content.split("\n")
+    out: list[str] = []
+    strip_depth = 0
+    title_next = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        if _WRAPPER_DIV_RE.match(stripped):
+            is_title = 'class="title"' in stripped
+            strip_depth += 1
+            if is_title:
+                title_next = True
+            continue
+
+        if stripped == "</div>":
+            if strip_depth > 0:
+                strip_depth -= 1
+                continue
+            # Non-wrapper closing div — keep it
+            out.append(line)
+            continue
+
+        if title_next and stripped:
+            out.append(f"**{stripped}**")
+            title_next = False
+            continue
+
+        if not title_next:
+            out.append(line)
+
+    return "\n".join(out)
+
+
 def post_process_markdown(content: str) -> str:
     """Clean up pandoc output artifacts."""
     # Remove empty anchor divs that pandoc sometimes generates
     content = re.sub(r'<div id="[^"]*">\s*</div>\n?', "", content)
+
+    # Strip HTML wrapper divs that pandoc emits from DocBook conversion.
+    # These are structural wrappers around markdown content — removing them
+    # keeps the content intact while reducing HTML density so file-type
+    # detectors (Magika) classify the output as markdown, not HTML/ERB.
+    content = _strip_wrapper_divs(content)
 
     # Clean up excessive blank lines
     content = re.sub(r"\n{3,}", "\n\n", content)

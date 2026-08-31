@@ -1,42 +1,20 @@
-<div wrapper="1" role="_abstract">
-
 Migrating FRR-K8s custom resources is required when upgrading from OpenShift Container Platform 4.17 or earlier with the MetalLB Operator deployed. Existing FRRConfiguration resources in the `metallb-system` namespace must be moved to the `openshift-frr-k8s` namespace to align with the updated architecture. Learn how to migrate these resources using the CLI and how to verify that the migration completed successfully.
-
-</div>
 
 All user-created FRR-K8s custom resources (CRs) in the `metallb-system` namespace under OpenShift Container Platform 4.17 and earlier releases must be migrated to the `openshift-frr-k8s` namespace. As a cluster administrator, you can migrate your FRR-K8s custom resources to the `openshift-frr-k8s` namespace using the CLI.
 
 # Migrating FRR-K8s resources
 
-<div wrapper="1" role="_abstract">
-
 You can migrate the FRR-K8s `FRRConfiguration` custom resources from the `metallb-system` namespace to the `openshift-frr-k8s` namespace.
-
-</div>
 
 When upgrading from an earlier version of OpenShift Container Platform with the Metal LB Operator deployed, you must manually migrate your custom `FRRConfiguration` configurations from the `metallb-system` namespace to the `openshift-frr-k8s` namespace.
 
-<div>
-
-<div class="title">
-
-Prerequisites
-
-</div>
+**Prerequisites**
 
 - You have installed the OpenShift CLI (`oc`).
 
 - You are logged in to the cluster as a user with the `cluster-admin` role.
 
-</div>
-
-<div>
-
-<div class="title">
-
-Procedure
-
-</div>
+**Procedure**
 
 1.  To create the `openshift-frr-k8s` namespace, enter the following command:
 
@@ -63,22 +41,12 @@ Procedure
     $ bash migrate.sh
     ```
 
-</div>
-
-<div>
-
-<div class="title">
-
-Verification
-
-</div>
+**Verification**
 
 - To confirm that the migration succeeded, run the following command:
 
   ``` terminal
   $ oc get frrconfigurations.frrk8s.metallb.io -n openshift-frr-k8s
   ```
-
-</div>
 
 After the migration is complete, you can remove the `FRRConfiguration` custom resources from the `metallb-system` namespace.

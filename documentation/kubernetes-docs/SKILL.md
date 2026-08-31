@@ -1,7 +1,6 @@
 ---
 name: kubernetes-docs
 description: Search and read Kubernetes documentation in markdown format. Use when the user asks about Kubernetes concepts, tasks, API reference, kubectl, or any upstream k8s topic — including pods, deployments, services, RBAC, networking, storage, or scheduling.
-allowed-tools: Bash(cat:*,grep:*,find:*,ls:*)
 ---
 
 # Kubernetes Documentation
