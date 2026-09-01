@@ -46,12 +46,11 @@ def search_local(name=None, path=PRODUCTS_PATH):
             if "name" in i and n in i["name"].lower():
                 names.append(i)
                 break
-            elif "former_names" in i:
-                for fname in i["former_names"]:
-                    if n in fname.lower():
-                        former_names.append(i)
-                        match = True
-                        break
+            for fname in (i.get("former_names") or []):
+                if n in fname.lower():
+                    former_names.append(i)
+                    match = True
+                    break
     if len(names) > 0:
         return names
     else:
@@ -100,21 +99,21 @@ def parse_ocp_versions(compat_string):
 def format_product_version(product, version, target_ocp=None):
     ocp_versions = parse_ocp_versions(version.get("openshift_compatibility"))
     result = {
-        "product": product["name"],
+        "product": product.get("name"),
         "former_names": product.get("former_names", []),
         "package": product.get("package"),
-        "version": version["name"],
+        "version": version.get("name"), # some entries shipped with no version
         "status": version.get("type", ""),
         "ocp_versions": ocp_versions,
         "phases": [
             {
-                "name": ph["name"],
+                "name": ph.get("name"),
                 "start_date": ph.get("start_date"),
                 "end_date": ph.get("end_date"),
                 "start_date_format": ph.get("start_date_format", "string"),
                 "end_date_format": ph.get("end_date_format", "string"),
             }
-            for ph in version.get("phases", [])
+            for ph in (version.get("phases") or [])
         ],
     }
     if target_ocp:
@@ -133,8 +132,13 @@ def cmd_products(args, output=sys.stdout):
     target_ocp = getattr(args, "ocp", None)
     results = []
     for p in products:
-        for v in p["versions"]:
+        for v in (p.get("versions") or []):
             results.append(format_product_version(p, v, target_ocp=target_ocp))
+
+    if len(results) == 0:
+        json.dump({"error": "no product versions found", "query": args.name}, output, indent=2)
+        output.write("\n")
+        return 1
 
     out = {"results": results, "total": len(results)}
     if target_ocp:
@@ -174,12 +178,12 @@ def cmd_olm_check(args, output=sys.stdout):
             results.append(entry)
             continue
 
-        all_versions = {v.get("name") for p in products for v in p["versions"]} - {None}
+        all_versions = {v.get("name") for p in products for v in (p.get("versions") or [])} - {None}
 
         if not requested_version:
             results.append({
                 "package": pkg,
-                "product": products[0]["name"],
+                "product": products[0].get("name"),
                 "available_versions": sorted(all_versions),
             })
             continue
@@ -187,7 +191,7 @@ def cmd_olm_check(args, output=sys.stdout):
         norm = _normalize_version(requested_version)
         matches = []
         for p in products:
-            for v in p["versions"]:
+            for v in (p.get("versions") or []):
                 if v.get("name") in (norm, f"{norm}.x"):
                     matches.append((p, v))
 
@@ -243,13 +247,13 @@ def main(args=None, output=sys.stdout):
         help="Query products by name (substring match)",
     )
     p_products.add_argument("name", help="Product name (substring match)")
-    p_products.add_argument("--ocp", help="Check compatibility against this OCP version (e.g. 4.21)")
+    p_products.add_argument("--ocp", help="Check compatibility against this OCP minor version (e.g. 4.21)")
 
     p_olm = subparsers.add_parser(
         "olm-check",
         help="Batch check OLM operators against a target OCP version",
     )
-    p_olm.add_argument("--ocp", required=True, help="Target OCP version (e.g. 4.21)")
+    p_olm.add_argument("--ocp", required=True, help="Target OCP minor version (e.g. 4.21)")
     p_olm.add_argument(
         "--operators",
         required=True,
