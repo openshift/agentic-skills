@@ -13,8 +13,9 @@ actionable prerequisites, blockers, and recommendations.
 
 The proposal request includes pre-collected cluster readiness data (JSON)
 gathered by the Cluster Version Operator. Analyze this data, classify findings,
-and produce a decision with evidence. Do not re-collect cluster data — it is
-already in the request.
+and produce a decision with evidence. Do not re-collect readiness data — it is
+already in the request. For conditional updates, query pre-accepted risks from
+the cluster — see "Query accepted risks" below.
 
 ## Inputs
 
@@ -22,6 +23,7 @@ The proposal request contains:
 - Current and target version metadata
 - Channel and update path information
 - **Cluster readiness JSON** — cluster health checks with context relevant to preparing for the update
+- **Conditional update risks** (when update path is `Conditional`) — risk metadata listed under `Conditional Update Risks:` with `Name` and `Applies` fields per risk
 
 The readiness JSON is embedded in the request between ` ```json ` markers under
 the "Cluster Readiness Data" heading. Parse it to begin analysis.
@@ -56,6 +58,30 @@ with a `summary` section for quick parsing.
 Extract the JSON from the proposal request.
 Count checks with `_status` `ok` vs `error` for completeness.
 
+### Query accepted risks
+
+When the update path is `Conditional`, query the cluster for pre-accepted risks:
+
+```bash
+oc get clusterversion version -o jsonpath='{.spec.desiredUpdate.acceptedRisks}'
+```
+
+The result is a JSON array of objects with a `name` field (the risk slug),
+e.g. `[{"name":"PDBDrainBlocker"}]`. If the field is missing or the jsonpath
+returns empty, no risks have been accepted.
+
+Skip this step when the update path is `Recommended` (no conditional risks).
+
+**Feature gate check:** If the jsonpath returns empty or an error, the
+`ClusterUpdateAcceptRisks` feature gate is likely off. In that case:
+- Set accepted risks to an empty list
+- Proceed with Phase 1 scoring (all applicable conditional risks are warnings)
+- Note in findings that the accepted risk API is unavailable
+- Do NOT treat this as an escalation trigger
+
+Cross-reference each conditional risk from the request (by its `Name` field)
+against the accepted risks list to determine accepted/not-accepted status.
+
 ### Verify data completeness
 
 Any check with `_status` `error` represents a gap in visibility.
@@ -68,7 +94,12 @@ Otherwise use sensible defaults.
 Walk through each check's summary and detail data:
 
 - Compare numeric thresholds (node headroom, etcd backup age)
-- Evaluate conditional update risks against cluster state
+- Evaluate conditional update risks using risk scoring v2:
+  - Risk `Applies: True` AND accepted → no penalty (not a warning or blocker)
+  - Risk `Applies: True` AND NOT accepted → classify as **warning**
+  - Risk `Applies: Unknown` → classify as **warning** (cannot confirm risk does not apply)
+  - Risk `Applies: False` → no action needed
+  - Feature gate off (accepted risk API unavailable) → all applicable risks are warnings
 - Identify compounding risks (e.g., paused MCP + cert expiry)
 - Estimate update duration (~10 min/node)
 
@@ -88,6 +119,7 @@ Assign each finding a severity per the classification table.
 | Network plugin | SDN in use and target requires OVN (4.17+) | Using deprecated SDN (< 4.17) |
 | CRD compatibility | Stored version not served; operator maxOpenShiftVersion < target | Deprecated versions still served |
 | OLM operator lifecycle | Installed operator incompatible with target OCP; operator product EOL | Operator has pending update; operator product in Maintenance Support |
+| Conditional update risk | n/a | Risk applies (or Unknown) AND not accepted by admin |
 
 For other checks, treat an issue as a blocker if would cause data loss, a performance regression, or a failed update.
 Treat the issue as a warning if would cause temporary disruption or slow updates.
@@ -126,6 +158,14 @@ Aggregate finding classification, and and make a decision on the overall assessm
 | 0 | 1+ | `warn` |
 | 0 | 0 | `recommend` |
 
+### Pass accepted risk context to planner
+
+Include each applicable conditional risk's name and accepted/not-accepted
+status in the output findings. The `cluster-update-planner` skill uses this
+to decide whether to include `acceptRisks` in the `oc patch clusterversion`
+command. If the accepted risk API is unavailable (feature gate off), note it
+so the planner omits `acceptRisks` from the patch command.
+
 ### Produce a structured risk report
 
 The output schema is enforced by the OlsAgent CR's `outputSchema` field —
@@ -151,3 +191,7 @@ the operator handles structured output compliance via the LLM API.
    that path exists.
 
 7. **Never recommend force-updating.** If the standard path is blocked, report it.
+
+8. **Never skip the accepted risk query for conditional updates.** When the
+   update path is `Conditional`, always query
+   `ClusterVersion.spec.desiredUpdate.acceptedRisks` at analysis time.
