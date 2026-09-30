@@ -1,0 +1,78 @@
+{
+  "skill_name": "argo-cluster-debug",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Application OutOfSync and Degraded",
+      "prompt": "My Application podinfo in the apps namespace is showing OutOfSync and Degraded. Debug it.",
+      "expectations": [
+        "Retrieves the Application resource and shows its sync and health status",
+        "Identifies the sync status as OutOfSync and health as Degraded",
+        "Checks status conditions for errors (ComparisonError, SyncError)",
+        "Checks operation state for last sync result and error messages",
+        "Identifies which resources are out of sync or unhealthy",
+        "Inspects the unhealthy managed resources (Deployments, Pods)",
+        "Checks pod logs or events for failing containers",
+        "Produces a report with root cause and recommendations"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Canary Rollout stuck at step 2",
+      "prompt": "The canary rollout for frontend in production namespace is stuck at step 2. Figure out why.",
+      "expectations": [
+        "Retrieves the Rollout and identifies its current phase",
+        "Identifies the current step index and what step 2 is",
+        "Checks pause conditions (manual pause vs analysis-driven)",
+        "Inspects associated AnalysisRuns if analysis is involved",
+        "Checks metric results and measurements in the AnalysisRun",
+        "Inspects traffic routing configuration if configured",
+        "Compares stable vs canary ReplicaSets and pod status",
+        "Produces a report with root cause and recommendations"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Argo CD installation health check",
+      "prompt": "Check if Argo CD is properly installed on my cluster and report the status.",
+      "expectations": [
+        "Checks for argoproj.io CRDs on the cluster",
+        "Identifies the Argo CD namespace (argocd or openshift-gitops)",
+        "Lists pods and their status in the Argo CD namespace",
+        "Checks core component health (server, repo-server, application-controller)",
+        "Reports the Argo CD version",
+        "Inspects configuration (argocd-cm or ArgoCD CR)",
+        "Reports any unhealthy components with diagnostic details",
+        "Produces a structured status report"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Workflow build-pipeline failing",
+      "prompt": "My Argo Workflow build-pipeline in the argo namespace keeps failing at the docker-build step. Debug it.",
+      "expectations": [
+        "Retrieves the Workflow and identifies its phase as Failed",
+        "Identifies the failed node (docker-build) from status.nodes",
+        "Gets logs for the failed pod",
+        "Checks for common failure patterns (OOMKilled, ImagePullBackOff, permission denied)",
+        "Checks resource limits on the docker-build template",
+        "Checks ServiceAccount permissions",
+        "Produces a report with root cause and recommendations"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "EventSource not receiving events",
+      "prompt": "The EventSource github-webhook in the events namespace isn't receiving events. Debug it.",
+      "expectations": [
+        "Retrieves the EventSource and checks its status conditions",
+        "Verifies the EventBus exists and its pods are running",
+        "Checks EventSource pod status and logs",
+        "Checks if the webhook Service/Ingress/Route is configured",
+        "Checks associated Sensor status",
+        "Analyzes connectivity (webhook reachable, firewall, DNS)",
+        "Produces a report with root cause and recommendations"
+      ]
+    }
+  ]
+}
