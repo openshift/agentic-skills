@@ -1,0 +1,24 @@
+- name: health_check_select_script
+  query: "An administrator asks whether OADP is ready before scheduling backups. Which skill script gives the combined readiness report?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["health_check.py", "create_schedule.py", "diagnose.py"]
+        description: "Use the health-check skill."
+    required: [script]
+  expected:
+    script: "health_check.py"
+
+- name: health_check_blocker
+  query: "The health-check result says ready is false because the BSL is Unavailable. Should the agent create a new backup now?"
+  schema:
+    type: object
+    properties:
+      proceed:
+        type: boolean
+        description: "Whether to create a backup despite the reported health blocker."
+    required: [proceed]
+  expected:
+    proceed: false
