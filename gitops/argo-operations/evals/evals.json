@@ -1,0 +1,102 @@
+{
+  "skill_name": "argo-operations",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Install or configure Argo CD on OpenShift",
+      "prompt": "Install Argo CD on my OpenShift cluster using the GitOps operator. I want the Route enabled with reencrypt TLS, OpenShift OAuth via Dex, RBAC that maps 'cluster-admins' group to admin role with default readonly policy, resource exclusions for Tekton TaskRun/PipelineRun, and notifications enabled.",
+      "expectations": [
+        "Checks if the OpenShift GitOps operator is already installed before generating a Subscription",
+        "If already installed, shows what configuration changes are needed on the existing ArgoCD CR",
+        "If not installed, generates a Subscription and ArgoCD CR with the requested settings",
+        "ArgoCD CR or patch includes Route with reencrypt TLS",
+        "ArgoCD CR or patch includes dex.openShiftOAuth or sso.dex.openShiftOAuth for OAuth",
+        "RBAC configured with readonly default and cluster-admins mapped to admin",
+        "Resource exclusions for Tekton TaskRun/PipelineRun included",
+        "Notifications enabled",
+        "Shows diff or preview of changes before applying",
+        "Asks for user confirmation before applying changes"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Create Application for OCI Helm chart",
+      "prompt": "Create an Application for my Helm chart at oci://registry.example.com/myapp version 2.x in the production namespace with automated sync, selfHeal, and prune enabled. The project is 'platform' and the cluster is in-cluster. Set CreateNamespace and ServerSideApply sync options.",
+      "expectations": [
+        "Generates Application YAML with argoproj.io/v1alpha1",
+        "OCI source with oci:// prefix and chart field",
+        "targetRevision with semver constraint for 2.x",
+        "Destination namespace production on in-cluster",
+        "project set to platform",
+        "Automated sync with prune and selfHeal true",
+        "syncOptions includes CreateNamespace=true and ServerSideApply=true",
+        "Shows the YAML and a dry-run or preview before applying",
+        "Asks for user confirmation before applying",
+        "Does NOT apply without confirmation"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Promote or assess canary rollout",
+      "prompt": "Promote the canary rollout canary-demo in the example-rollout namespace.",
+      "expectations": [
+        "Checks the current rollout status BEFORE attempting promotion",
+        "Reports current phase, step index, and replica counts",
+        "If already healthy/fully promoted: correctly identifies no action needed and explains why",
+        "If paused/in-progress: shows the promote command and explains what it will do",
+        "Does NOT blindly execute promote without checking status first",
+        "Does NOT use --full unless explicitly requested",
+        "Asks for confirmation before executing any state-changing command",
+        "Provides context on what promotion means for this specific rollout (steps, weights)"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Upgrade Argo CD",
+      "prompt": "Upgrade Argo CD to the latest version on my cluster.",
+      "expectations": [
+        "Checks current Argo CD version and installation method first",
+        "Identifies the correct upgrade path for the installation method (Helm, OLM, or manual)",
+        "If OLM/operator: explains the operator upgrade path (subscription channel, install plan approval)",
+        "If Helm: generates CRD updates first, then helm upgrade with --dry-run",
+        "Recommends backing up Applications/AppProjects before upgrading",
+        "Mentions checking release notes or breaking changes",
+        "Shows preview of what will change",
+        "Asks for confirmation before applying",
+        "Includes post-upgrade verification steps"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Backup Argo CD resources",
+      "prompt": "Back up all my Argo CD Applications and AppProjects to YAML files.",
+      "expectations": [
+        "Exports Application resources to YAML files",
+        "Exports AppProject resources to YAML files",
+        "Saves to individual files or a structured backup directory",
+        "Reports the count of exported resources",
+        "Offers to also export ConfigMaps (argocd-cm, argocd-rbac-cm) or ArgoCD CR",
+        "Offers to export credential Secrets with a clear security warning",
+        "Does NOT modify or delete any cluster resources",
+        "Handles the backup as a read-only operation (no confirmation needed for export)"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Set up gitops-promoter for environment promotion",
+      "prompt": "Set up gitops-promoter on my cluster for environment promotion of our payments app. The repo is on GitHub at acme-corp/payments. I want three environments: dev (auto-promote), staging (auto-promote), and production (manual approval). Gate on Argo CD app health for all environments, and add a security-scan check before merging into any environment.",
+      "expectations": [
+        "Generates or references installation of gitops-promoter (kubectl apply or helm install)",
+        "Generates a Secret for GitHub App credentials",
+        "Generates an ScmProvider with github config (appID, installationID)",
+        "Generates a GitRepository referencing the ScmProvider with owner and repo name",
+        "Generates a PromotionStrategy with 3 environments (dev, staging, production branches)",
+        "Production has autoMerge: false, dev and staging auto-merge",
+        "activeCommitStatuses includes argocd-app-health",
+        "proposedCommitStatuses includes security-scan",
+        "Shows dry-run or preview before applying",
+        "Asks for user confirmation before applying"
+      ]
+    }
+  ]
+}
