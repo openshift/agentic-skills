@@ -1,0 +1,99 @@
+{
+  "skill_name": "argo-team-onboard",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Basic team onboarding (Kustomize)",
+      "prompt": "Onboard a new team called 'checkout' onto our Argo CD cluster. They have a Git repo at https://github.com/acme/checkout-svc.git with Kustomize overlays in overlays/dev and overlays/production. They need two namespaces: checkout-dev and checkout-prod. Their SSO group is 'checkout-developers'. They should be able to sync their own apps but not access other teams' namespaces. Generate the AppProject, Application for dev, and RBAC configuration.",
+      "expectations": [
+        "Output includes kind: AppProject with sourceRepos restricted to https://github.com/acme/checkout-svc.git",
+        "AppProject destinations are scoped to checkout-dev and checkout-prod namespaces only (no wildcards)",
+        "AppProject clusterResourceWhitelist is empty or limited to Namespace only",
+        "AppProject has namespaceResourceBlacklist blocking ResourceQuota and/or LimitRange",
+        "AppProject has orphanedResources.warn: true",
+        "AppProject includes a role for checkout-developers group with scoped permissions (not wildcard actions)",
+        "Output includes kind: Application with source.path pointing to a Kustomize overlay (overlays/dev or similar)",
+        "Application has syncPolicy with automated, prune, selfHeal, and retry",
+        "Application uses project: checkout (references the generated AppProject)",
+        "Application destination is scoped to the correct namespace (checkout-dev)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Helm chart team onboarding",
+      "prompt": "Onboard the 'analytics' team. They deploy a Helm chart from an OCI registry at oci://registry.acme.com/charts/analytics-dashboard. The chart version is 3.2.0 and they have a values file in a separate Git repo at https://github.com/acme/analytics-config.git under values/production.yaml. They need namespace 'analytics-prod'. SSO group is 'analytics-team'. Generate the onboarding resources.",
+      "expectations": [
+        "Output includes kind: AppProject with sourceRepos containing both the OCI registry URL and the Git config repo",
+        "AppProject destinations scoped to analytics-prod namespace",
+        "Output includes kind: Application with multi-source configuration (sources array, not single source)",
+        "One source references the OCI Helm chart with chart name and targetRevision: 3.2.0",
+        "Another source references the Git config repo with values file path",
+        "The Helm source uses $values reference to pull values from the Git source",
+        "Application has syncPolicy with automated sync and retry",
+        "Application uses project: analytics (references the AppProject)",
+        "Does NOT generate a Kustomize-based Application — respects the team's Helm-based workflow"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Self-service ApplicationSet onboarding",
+      "prompt": "We've onboarded 3 teams manually and it's becoming a bottleneck. Set up a self-service onboarding system where teams can add themselves by submitting a PR to our GitOps repo at https://github.com/acme/platform-config.git. Each team needs an AppProject and an Application. Show me the teams.yaml config format, the ApplicationSet that reads it, and explain the workflow.",
+      "expectations": [
+        "Output includes a teams.yaml schema with fields for team name, repos, namespaces, source type, SSO group",
+        "Output includes kind: ApplicationSet with a git-file generator pointing to teams.yaml",
+        "ApplicationSet uses goTemplate: true for flexible templating",
+        "ApplicationSet template generates an AppProject per team entry (or an Application that creates one)",
+        "ApplicationSet template generates an Application per team entry",
+        "The generated AppProject has scoped sourceRepos and destinations from the teams.yaml data",
+        "Explains the PR-based workflow: team submits PR → platform review → merge → resources created",
+        "Mentions what platform team controls (base templates, quota tiers) vs what teams customize",
+        "Does NOT generate a monolithic Application that manages all teams — uses per-team isolation"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Discovery: detect existing setup and fill gaps",
+      "prompt": "I already have an Argo CD cluster with two AppProjects: 'team-frontend' and 'team-backend'. The frontend team has their Application running fine. Now I need to onboard a third team called 'data-eng'. They use Kustomize, their repo is https://github.com/acme/data-pipelines.git, they need namespace 'data-eng', and their SSO group is 'data-engineers'. The namespace already exists with a ResourceQuota. Don't create things that already exist.",
+      "expectations": [
+        "Does NOT generate Namespace or ResourceQuota — recognizes they already exist",
+        "Does NOT modify existing AppProjects (team-frontend, team-backend)",
+        "Generates a NEW AppProject for data-eng with appropriate restrictions",
+        "Generates a NEW Application pointing to the data-pipelines repo",
+        "Asks or confirms what already exists before generating — demonstrates discovery-first behavior",
+        "Does NOT generate a blanket 'create everything from scratch' response",
+        "Output is minimal — only the delta (AppProject + Application + RBAC for the new team)"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Refuse overprivileged onboarding",
+      "prompt": "Onboard the 'platform-ops' team with full cluster access. They need sourceRepos: '*' because they deploy from many repos that change frequently. Give them clusterResourceWhitelist with group: '*' kind: '*' so they can manage CRDs and ClusterRoles. And set their project role to applications: * with exec permission so they can debug pods.",
+      "expectations": [
+        "Does NOT generate wildcard sourceRepos: '*' — explains the security risk",
+        "Does NOT generate wildcard clusterResourceWhitelist '*/*' — explains privilege escalation",
+        "Does NOT grant exec permission — explains pod access risk",
+        "Provides the least-privilege alternative for each request",
+        "For 'many repos that change': suggests listing repos explicitly or using a regex pattern if supported",
+        "For 'manage CRDs': suggests scoping to specific CRD groups the team actually needs",
+        "For 'debug pods': suggests kubectl exec with scoped RBAC instead of Argo CD exec",
+        "Tone is helpful — explains WHY each request is dangerous and provides the right alternative"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Multi-env onboarding with gitops-promoter",
+      "prompt": "Onboard the 'payments' team with a proper dev → staging → production promotion flow. They use Kustomize, their repo is https://github.com/acme/payments.git. They need 3 environments with gitops-promoter gating promotions between them. Dev should auto-sync, staging should auto-promote after health checks pass, and production should require manual approval. Show me all the Argo CD resources and the promoter configuration.",
+      "expectations": [
+        "Generates an AppProject with destinations for all 3 namespaces (payments-dev, payments-staging, payments-prod)",
+        "Generates 3 Applications (or an ApplicationSet) — one per environment",
+        "Each Application uses a different targetRevision (environment-specific branches, not all on main)",
+        "Does NOT put all 3 Applications on targetRevision: main with different paths only — that defeats promotion",
+        "Output includes a PromotionStrategy with 3 environments using branch-based promotion",
+        "PromotionStrategy has activeCommitStatuses for health gating (at least pipeline-status and argocd-health)",
+        "Production environment has autoMerge: false for manual approval",
+        "Dev and staging have autoMerge: true (with commit status gates)",
+        "Explains the branch-per-environment model: pipeline commits to dev branch, promoter merges to staging, then to prod"
+      ]
+    }
+  ]
+}
