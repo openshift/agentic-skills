@@ -1,0 +1,177 @@
+# create-backup skill eval test cases
+#
+# Static tests verify tool-selection and protocol knowledge: given a step in
+# the backup workflow, the agent must pick the correct script.
+#
+# Mock-based tests embed canned Backup status JSON and verify the agent
+# interprets the outcome correctly (phase, success, failure handling).
+
+# --- Static tool-selection tests ---
+
+- name: preflight_before_backup
+  query: "A user asks you to back up namespace 'wordpress' with OADP. According to the create-backup skill protocol, which script must you run first, before creating the backup, to confirm the install is healthy?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["preflight.sh", "create-backup.sh", "monitor-backup.sh", "verify-backup.sh"]
+        description: "The script that checks install readiness. Use the 'create-backup' skill to find this."
+    required: [script]
+  expected:
+    script: "preflight.sh"
+
+- name: trigger_the_backup
+  query: "Preflight passed. Which create-backup script uses the OADP CLI to create the Backup custom resource for the requested namespaces?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["preflight.sh", "create-backup.sh", "monitor-backup.sh", "verify-backup.sh"]
+        description: "The script that creates the Backup CR. Use the 'create-backup' skill to find this."
+    required: [script]
+  expected:
+    script: "create-backup.sh"
+
+- name: watch_until_terminal
+  query: "You created a backup named 'wordpress-backup-20260101'. Which create-backup script polls it until it reaches a terminal phase like Completed or Failed?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["preflight.sh", "create-backup.sh", "monitor-backup.sh", "verify-backup.sh"]
+        description: "The script that polls backup phase to completion. Use the 'create-backup' skill to find this."
+    required: [script]
+  expected:
+    script: "monitor-backup.sh"
+
+- name: verify_outcome
+  query: "The backup reached a terminal phase. Which create-backup script summarizes the outcome, including per-volume PodVolumeBackup and DataUpload counts and actionable guidance?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["preflight.sh", "create-backup.sh", "monitor-backup.sh", "verify-backup.sh"]
+        description: "The script that summarizes the final backup outcome. Use the 'create-backup' skill to find this."
+    required: [script]
+  expected:
+    script: "verify-backup.sh"
+
+- name: fs_backup_flag
+  query: "A user wants to back up namespace 'db' and its persistent volume data using filesystem backup (Kopia/Restic via the node-agent). Which flag do you pass to create-backup.sh to enable filesystem backup of volumes?"
+  schema:
+    type: object
+    properties:
+      flag:
+        type: string
+        enum: ["--fs-backup", "--snapshot-volumes", "--selector", "--emit-only"]
+        description: "The flag that enables filesystem volume backup. Use the 'create-backup' skill to find this."
+    required: [flag]
+  expected:
+    flag: "--fs-backup"
+
+# --- Mock-based reasoning tests ---
+
+- name: interpret_completed_backup
+  query: |
+    You ran verify-backup.sh for backup 'wordpress-backup-20260101' and got:
+    {"name":"wordpress-backup-20260101","phase":"Completed","succeeded":true,"warnings":0,"errors":0,"items_backed_up":142,"total_items":142,"volume_backups":{"pod_volume_backups":{"Completed":3},"data_uploads":{}},"guidance":[]}
+    Did the backup succeed, and how many items were backed up?
+  schema:
+    type: object
+    properties:
+      succeeded:
+        type: boolean
+        description: "Whether the backup fully succeeded"
+      items_backed_up:
+        type: integer
+        description: "Number of items backed up"
+    required: [succeeded, items_backed_up]
+  expected:
+    succeeded: true
+    items_backed_up: 142
+
+- name: interpret_partially_failed_backup
+  query: |
+    You ran verify-backup.sh for backup 'db-backup-20260101' and got:
+    {"name":"db-backup-20260101","phase":"PartiallyFailed","succeeded":false,"warnings":1,"errors":2,"items_backed_up":98,"total_items":100,"volume_backups":{"pod_volume_backups":{},"data_uploads":{"Completed":1,"Failed":1}},"guidance":["Backup partially failed with 2 error(s) and 1 warning(s). Some resources or volumes were not backed up.","For volume-level failures (CSI snapshots or data mover), use the OADP diagnose skill on backup db-backup-20260101."]}
+    What is the backup's phase, did it fully succeed, and which skill should handle the volume-level (data mover) failure?
+  schema:
+    type: object
+    properties:
+      phase:
+        type: string
+        enum: ["Completed", "PartiallyFailed", "Failed", "FailedValidation", "InProgress"]
+        description: "The terminal phase of the backup"
+      succeeded:
+        type: boolean
+        description: "Whether the backup fully succeeded with zero errors"
+      handoff_skill:
+        type: string
+        enum: ["diagnose", "restore-backup", "schedule-backup", "health-check"]
+        description: "The OADP skill to hand volume-level failures off to"
+    required: [phase, succeeded, handoff_skill]
+  expected:
+    phase: "PartiallyFailed"
+    succeeded: false
+    handoff_skill: "diagnose"
+
+- name: interpret_incomplete_volume_inspection
+  query: |
+    verify-backup.sh returned:
+    {"name":"wordpress-backup","phase":"Completed","succeeded":true,"warnings":0,"errors":0,"volume_backups":{"pod_volume_backups":{"Completed":1},"data_uploads":null},"inspection_errors":["Cannot list datauploads.velero.io: forbidden"],"guidance":["Volume results could not be fully inspected."]}
+    Did the Backup CR complete successfully, and do you have complete volume inspection results?
+  schema:
+    type: object
+    properties:
+      backup_succeeded:
+        type: boolean
+        description: "Whether the Backup CR completed with zero errors"
+      volume_inspection_complete:
+        type: boolean
+        description: "Whether all volume resources were inspected successfully"
+    required: [backup_succeeded, volume_inspection_complete]
+  expected:
+    backup_succeeded: true
+    volume_inspection_complete: false
+
+- name: interpret_preflight_blocked
+  query: |
+    You ran preflight.sh before creating a backup and got:
+    {"ready":false,"namespace":"openshift-adp","dpa":"velero-sample","storage_location":"primary","available_bsls":[],"checks":[{"name":"dpa_reconciled","status":"ok","detail":"DPA velero-sample is reconciled"},{"name":"velero_deployment","status":"ok","detail":"Velero deployment has 1 available replica(s)"},{"name":"node_agent","status":"ok","detail":"node-agent ready (3/3)"},{"name":"backup_storage_location","status":"error","detail":"BackupStorageLocation primary is Unavailable with access mode ReadWrite; choose an Available, writable location"}],"blockers":["BackupStorageLocation primary is Unavailable with access mode ReadWrite; choose an Available, writable location"]}
+    Is the install ready to take a backup, and should you proceed to create the backup now?
+  schema:
+    type: object
+    properties:
+      ready:
+        type: boolean
+        description: "Whether preflight reports the install as ready"
+      proceed_to_create:
+        type: boolean
+        description: "Whether you should create the backup now given the preflight result"
+    required: [ready, proceed_to_create]
+  expected:
+    ready: false
+    proceed_to_create: false
+
+- name: interpret_readonly_create_result
+  query: |
+    You ran create-backup.sh and got:
+    {"created":false,"backup_name":"wordpress-backup-20260101","namespace":"openshift-adp","storage_location":"primary","manifest":"{\"apiVersion\":\"velero.io/v1\",\"kind\":\"Backup\"}","create_command":"oc oadp -n openshift-adp backup create wordpress-backup-20260101 --include-namespaces wordpress --storage-location primary","rbac":"apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\n...\nkind: RoleBinding\n...","note":"current identity cannot create and read backups.velero.io in openshift-adp"}
+    Was the backup actually created and started on the cluster?
+  schema:
+    type: object
+    properties:
+      backup_created:
+        type: boolean
+        description: "Whether the Backup CR was actually applied and started"
+      needs_rbac:
+        type: boolean
+        description: "Whether additional RBAC is required for the identity to create the backup"
+    required: [backup_created, needs_rbac]
+  expected:
+    backup_created: false
+    needs_rbac: true

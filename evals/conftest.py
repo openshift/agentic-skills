@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from .framework.credentials import PROVIDER_NAMES, detect_all
+from .framework.credentials import PROVIDER_NAMES, detect_credentials
 from .framework.report import pytest_addoption, pytest_configure, store_eval_result  # noqa: F401
 from .framework.runner import RunResult, run_query
 
@@ -30,7 +30,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         return
 
     server_urls = _parse_env_map("EVAL_SERVER_URLS")
-    creds = detect_all()
     params = []
     for name in PROVIDER_NAMES:
         if name not in server_urls:
@@ -38,7 +37,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 pytest.param(name, id=name, marks=pytest.mark.skip(reason=f"No server for {name}"))
             )
             continue
-        status = creds[name]
+        status = detect_credentials(name)
         if not status.available:
             params.append(
                 pytest.param(name, id=name, marks=pytest.mark.skip(reason=status.reason))
