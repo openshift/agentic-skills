@@ -54,7 +54,7 @@ phase_counts() {
     return
   fi
   require_json "$json" "$kind list"
-  PHASE_COUNTS=$(jq '[.items[].status.phase // "Unknown"] | group_by(.) | map({(.[0]): length}) | add // {}' <<< "$json")
+  PHASE_COUNTS=$(jq '(.items // []) | map(.status.phase // "Unknown") | group_by(.) | map({(.[0]): length}) | add // {}' <<< "$json")
 }
 
 phase_counts podvolumebackups.velero.io

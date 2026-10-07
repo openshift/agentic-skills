@@ -175,6 +175,9 @@ assert '.code == "INVALID_INTERVAL"' "$result"
 result=$(bash "$SKILL_DIR/scripts/monitor-backup.sh" --name wordpress-backup --timeout 0)
 assert '.terminal == true and .phase == "Completed"' "$result"
 
+result=$(bash "$SKILL_DIR/scripts/verify-backup.sh" --name wordpress-backup)
+assert '.succeeded == true and .volume_backups.data_uploads == {} and .volume_backups.pod_volume_backups.Completed == 1' "$result"
+
 export MOCK_DENY_DU=1
 result=$(bash "$SKILL_DIR/scripts/verify-backup.sh" --name wordpress-backup)
 assert '.succeeded == true and .volume_backups.data_uploads == null and (.inspection_errors | length) == 1 and .volume_snapshots.csi_completed == 1' "$result"
