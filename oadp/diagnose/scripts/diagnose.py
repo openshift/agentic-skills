@@ -64,10 +64,11 @@ def main():
         add("validation", status.get("validationErrors", []) or ["Operation failed validation"],
             "Correct the reported spec or storage error, then create a new operation")
     if status.get("failureReason"):
-        add("operation_failure", status["failureReason"], "Inspect OADP CLI describe and logs for the failing resource")
+        add("operation_failure", status["failureReason"],
+            "Inspect OADP CLI describe and relevant events; request redacted logs if more evidence is needed")
     if status.get("errors", 0) or status.get("warnings", 0):
         add("operation_messages", {"errors": status.get("errors", 0), "warnings": status.get("warnings", 0)},
-            "Read operation logs for the affected resources; counts alone do not identify the cause")
+            "Inspect affected resources with OADP CLI describe and relevant events; counts alone do not identify the cause")
 
     children = {}
     if args.kind == "backup":
@@ -154,14 +155,16 @@ def main():
         inspection_errors.append(f"Cannot inspect node-agent: {exc}")
 
     cli = f"oc oadp -n {args.namespace} {args.kind}"
-    commands = [f"{cli} describe {args.name} --details", f"{cli} logs {args.name}"]
+    commands = [f"{cli} describe {args.name} --details"]
+    manual_log_command = f"{cli} logs {args.name}"
     if not findings and phase in ("Failed", "PartiallyFailed"):
         add("unclassified", f"{args.kind} phase is {phase}, but inspected resources did not identify a cause",
-            "Read the operation logs and relevant Kubernetes events before retrying")
+            "Inspect relevant Kubernetes events and request a redacted log excerpt before retrying")
     print(json.dumps({"kind": args.kind, "name": args.name, "namespace": args.namespace,
                       "phase": phase, "findings": findings, "volume_operations": children,
                       "csi_snapshots": csi_snapshots,
                       "inspection_errors": inspection_errors, "next_commands": commands,
+                      "manual_log_command": manual_log_command,
                       "note": "Findings are observations and investigation steps, not a proven root cause"}))
     return 0
 

@@ -48,7 +48,7 @@ def main():
     succeeded = phase == "Completed" and errors == 0 and item_failures == 0 and not unfinished_volumes
     guidance = []
     if phase in ("Failed", "PartiallyFailed", "FailedValidation") or errors or unfinished_volumes:
-        guidance.append(f"Inspect with oc oadp -n {args.namespace} restore describe {args.name} --details and oc oadp -n {args.namespace} restore logs {args.name}.")
+        guidance.append(f"Inspect with oc oadp -n {args.namespace} restore describe {args.name} --details and relevant events. Request a redacted log excerpt if more evidence is needed.")
         guidance.append("Use the diagnose skill to examine CSI, node-agent, and data-mover failures.")
     if inspection_errors:
         guidance.append("Volume inspection is incomplete; do not claim volume restoration was verified.")

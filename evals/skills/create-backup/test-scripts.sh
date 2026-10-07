@@ -34,7 +34,7 @@ case "$1" in
       backupstoragelocation)
         printf '%s\n' "$MOCK_BSL_JSON" ;;
       backup)
-        echo '{"metadata":{"name":"wordpress-backup","namespace":"openshift-adp"},"spec":{"includedNamespaces":["wordpress"],"storageLocation":"primary"},"status":{"phase":"Completed","warnings":0,"errors":0,"progress":{"itemsBackedUp":4,"totalItems":4},"csiVolumeSnapshotsCompleted":1}}' ;;
+        printf '{"metadata":{"name":"wordpress-backup","namespace":"openshift-adp"},"spec":{"includedNamespaces":["wordpress"],"storageLocation":"primary"},"status":{"phase":"%s","warnings":0,"errors":%s,"progress":{"itemsBackedUp":4,"totalItems":4},"csiVolumeSnapshotsCompleted":1}}\n' "${MOCK_BACKUP_PHASE:-Completed}" "${MOCK_BACKUP_ERRORS:-0}" ;;
       podvolumebackups.velero.io)
         echo '{"items":[{"status":{"phase":"Completed"}}]}' ;;
       datauploads.velero.io)
@@ -187,5 +187,10 @@ export MOCK_DU_PHASE=Failed
 result=$(bash "$SKILL_DIR/scripts/verify-backup.sh" --name wordpress-backup)
 assert '.succeeded == false and .volume_backups.data_uploads.Failed == 1' "$result"
 unset MOCK_DU_PHASE
+
+export MOCK_BACKUP_PHASE=PartiallyFailed MOCK_BACKUP_ERRORS=1
+result=$(bash "$SKILL_DIR/scripts/verify-backup.sh" --name wordpress-backup)
+assert '.succeeded == false and (.guidance | join(" ") | contains("backup logs") | not)' "$result"
+unset MOCK_BACKUP_PHASE MOCK_BACKUP_ERRORS
 
 echo 'create-backup script tests passed'

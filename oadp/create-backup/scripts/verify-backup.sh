@@ -74,11 +74,11 @@ case "$PHASE" in
     ;;
   PartiallyFailed)
     add_guidance "Backup partially failed with $ERRORS error(s) and $WARNINGS warning(s). Some resources or volumes were not backed up."
-    add_guidance "Inspect with oc oadp -n $NS backup describe $NAME --details and oc oadp -n $NS backup logs $NAME."
+    add_guidance "Inspect with oc oadp -n $NS backup describe $NAME --details and relevant events. Request a redacted log excerpt if more evidence is needed."
     add_guidance "Investigate CSI, data mover, and PodVolumeBackup failures for backup $NAME. Use the OADP diagnose skill if available."
     ;;
   Failed)
-    add_guidance "Backup failed with $ERRORS error(s). Inspect with oc oadp -n $NS backup describe $NAME --details and oc oadp -n $NS backup logs $NAME."
+    add_guidance "Backup failed with $ERRORS error(s). Inspect with oc oadp -n $NS backup describe $NAME --details and relevant events. Request a redacted log excerpt if more evidence is needed."
     add_guidance "Investigate Velero, CSI, and data mover failures for backup $NAME. Use the OADP diagnose skill if available."
     ;;
   FailedValidation)

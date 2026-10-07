@@ -220,6 +220,7 @@ class Phase1Tests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertFalse(result["succeeded"])
         self.assertEqual(result["volume_restores"]["data_downloads"], {"Failed": 1})
+        self.assertFalse(any(" restore logs " in item for item in result["guidance"]))
 
     def test_restore_rejects_partial_backup_without_explicit_choice(self):
         state, run = self.state, self.run_script
@@ -265,6 +266,8 @@ class Phase1Tests(unittest.TestCase):
         self.assertIn("Backup progress", snapshot_finding["next_step"])
         self.assertNotIn("Restore failure", snapshot_finding["next_step"])
         self.assertEqual(result["volume_operations"]["data_uploads"][0]["message"], "repository unavailable")
+        self.assertFalse(any(" logs " in command for command in result["next_commands"]))
+        self.assertIn(" logs ", result["manual_log_command"])
         self.assertFalse(any(c[:1] == ["oadp"] for c in calls))
 
     def test_diagnose_restore_reports_missing_inspection(self):

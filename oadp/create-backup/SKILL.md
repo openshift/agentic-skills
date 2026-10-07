@@ -26,6 +26,7 @@ compatibility: Requires an authenticated OpenShift oc session, the oc-oadp plugi
   - The flags are mutually exclusive in this skill. If neither is requested, Velero uses its configured defaults. Preflight reports `default_fs_backup`; the create script checks node-agent when that default is enabled. State the requested setting and the volume results observed after verification. A flag alone does not prove that volume data was captured.
 - After creating a backup, monitor it to a terminal phase, then verify. Do not report success from `create-backup.sh` alone; success requires phase `Completed`, zero Backup errors, and no observed failed volume operations or missing snapshots.
 - On `PartiallyFailed` or `Failed`, do not retry blindly. Surface the errors and use the diagnose skill if it is available.
+- Use describe and Kubernetes events to investigate warnings or failures. Do not run raw Backup or Velero logs into agent context, since plugin logs may contain credentials. Ask an operator for a redacted excerpt if further evidence is needed.
 - All scripts output JSON to stdout and return a structured error object on failure. Use `jq` for further filtering.
 - Do not ask the user to run a command; gather the information yourself where you have access.
 - Be concise. Evidence-backed statements, no filler.

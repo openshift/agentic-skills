@@ -15,4 +15,6 @@ This skill creates a Velero `Restore` in the OADP namespace (default `openshift-
 4. If `created` is true, run `python3 scripts/monitor_restore.py --name <restore>`, then `python3 scripts/verify_restore.py --name <restore>`. Report completion only for phase `Completed` with zero errors and no observed failed volume operations. Surface warnings, item counts, PodVolumeRestore and DataDownload phases, and any incomplete inspection. A completed Velero Restore does not prove application health; verify the recovered workload in its target namespace separately.
 5. On `PartiallyFailed`, `Failed`, or `FailedValidation`, use the `diagnose` skill. Do not retry a restore into an existing namespace without understanding its partial effects.
 
+Use describe and Kubernetes events to investigate warnings or failures. Do not run raw Restore or Velero logs into agent context, since plugin logs may contain credentials. Ask an operator for a redacted excerpt if further evidence is needed.
+
 Scripts return JSON. A create result with `created: false` is a preview or permission handoff, not a started Restore.
