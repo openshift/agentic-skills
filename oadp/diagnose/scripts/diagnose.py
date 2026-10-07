@@ -101,10 +101,13 @@ def main():
         native_attempted = backup_status.get("volumeSnapshotsAttempted", 0)
         native_completed = backup_status.get("volumeSnapshotsCompleted", 0)
         if csi_attempted > csi_completed or native_attempted > native_completed:
+            next_step = ("Check Backup progress and CSI snapshot events if the count remains incomplete"
+                         if args.kind == "backup" else
+                         "Inspect source Backup snapshot errors and CSI driver events; these counts alone do not establish the Restore failure cause")
             add("snapshot" if args.kind == "backup" else "source_backup_snapshot",
                 {"csi_attempted": csi_attempted, "csi_completed": csi_completed,
                  "native_attempted": native_attempted, "native_completed": native_completed},
-                "Inspect source Backup snapshot errors and CSI driver events; these counts do not establish the Restore failure cause")
+                next_step)
         if csi_attempted:
             for kind, key, extra in (
                 ("volumesnapshots.snapshot.storage.k8s.io", "volume_snapshots", ["-A"]),

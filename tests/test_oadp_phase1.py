@@ -260,6 +260,10 @@ class Phase1Tests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertGreaterEqual({finding["category"] for finding in result["findings"]},
                                 {"snapshot", "csi_snapshot", "data_mover"})
+        snapshot_finding = next(finding for finding in result["findings"]
+                                if finding["category"] == "snapshot")
+        self.assertIn("Backup progress", snapshot_finding["next_step"])
+        self.assertNotIn("Restore failure", snapshot_finding["next_step"])
         self.assertEqual(result["volume_operations"]["data_uploads"][0]["message"], "repository unavailable")
         self.assertFalse(any(c[:1] == ["oadp"] for c in calls))
 
