@@ -18,9 +18,21 @@ if [ -z "$RUNTIME" ]; then
     exit 1
 fi
 
+# Available providers: claude gemini openai deepagents-claude deepagents-gemini deepagents-openai
+IFS=',' read -ra PROVIDERS <<< "${EVAL_PROVIDERS:-claude}"
+
+# OpenAI-only runs do not need a copy of local Google credentials in the container.
+MOUNT_GCLOUD_ADC=false
+for name in "${PROVIDERS[@]}"; do
+    case "$name" in
+        openai|deepagents-openai) ;;
+        *) MOUNT_GCLOUD_ADC=true ;;
+    esac
+done
+
 GCLOUD_ADC="${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/.config/gcloud/application_default_credentials.json}"
 GCLOUD_MOUNT_ARGS=()
-if [ -f "$GCLOUD_ADC" ]; then
+if [ "$MOUNT_GCLOUD_ADC" = true ] && [ -f "$GCLOUD_ADC" ]; then
     GCLOUD_ADC_TMP=$(mktemp /tmp/gcloud-adc.XXXXXX)
     cp "$GCLOUD_ADC" "$GCLOUD_ADC_TMP"
     chmod 600 "$GCLOUD_ADC_TMP"
@@ -28,9 +40,6 @@ if [ -f "$GCLOUD_ADC" ]; then
     GCLOUD_MOUNT_ARGS=(-v "$GCLOUD_ADC_TMP:$gcloud_mount_path:ro,Z,U" -e "LIGHTSPEED_LLM_CREDENTIALS_PATH=/tmp/gcloud-adc" \
      -e "GOOGLE_APPLICATION_CREDENTIALS=$gcloud_mount_path")
 fi
-
-# Available providers: claude gemini openai deepagents-claude deepagents-gemini deepagents-openai
-IFS=',' read -ra PROVIDERS <<< "${EVAL_PROVIDERS:-claude}"
 
 CONTAINERS=()
 WORKDIRS=()
@@ -44,7 +53,7 @@ cleanup() {
         $RUNTIME stop "eval-${name}" 2>/dev/null || true
         $RUNTIME rm -f "eval-${name}" 2>/dev/null || true
     done
-    for d in "${WORKDIRS[@]}"; do
+    for d in ${WORKDIRS[@]+"${WORKDIRS[@]}"}; do
         rm -rf "$d" 2>/dev/null || true
     done
     [ -n "${GCLOUD_ADC_TMP:-}" ] && rm -f "$GCLOUD_ADC_TMP" 2>/dev/null || true
@@ -107,14 +116,13 @@ for i in "${!PROVIDERS[@]}"; do
     cp -al "$SHARED_WORKSPACE/skills" "$workdir/skills"
     chmod -R 777 "$workdir" "$outdir"
 
-    cid=$($RUNTIME run -d --rm \
+    cid=$($RUNTIME run -d \
         --name "eval-${name}" \
         -p "${port}:8080" \
         -v "${workdir}:/app/workspace:Z" \
         -v "${outdir}:/app/eval-output:Z" \
         -e EVAL_OUTPUT_DIR="/app/eval-output" \
-        -e PYTHONPATH="/app/src:/opt/app-root/lib64/python3.12/site-packages" \
-        "${GCLOUD_MOUNT_ARGS[@]}" \
+        ${GCLOUD_MOUNT_ARGS[@]+"${GCLOUD_MOUNT_ARGS[@]}"} \
         -e LIGHTSPEED_PROVIDER="$agent_provider" \
         -e LIGHTSPEED_MODEL_PROVIDER="$model_provider" \
         -e LIGHTSPEED_PROVIDER_PROJECT="${ANTHROPIC_VERTEX_PROJECT_ID:-}" \
@@ -178,4 +186,4 @@ PYTEST="${PYTEST:-python3 -m pytest}"
 
 export EVAL_SERVER_URLS="$SERVER_URLS"
 export EVAL_WORKSPACES="$WORKSPACE_MAP"
-$PYTEST evals/ -v "${EVAL_ARGS[@]}"
+$PYTEST evals/ -v ${EVAL_ARGS[@]+"${EVAL_ARGS[@]}"}
