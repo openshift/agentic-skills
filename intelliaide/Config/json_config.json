@@ -1,0 +1,39 @@
+{
+    "error_detection": {
+      "error_array_indicators": {
+        "dropped": "failed_connection",
+        "failed": "failure",
+        "error": "error",
+        "unhealthy": "health_issue",
+        "down": "unavailable",
+        "unreachable": "connectivity",
+        "degraded": "degradation",
+        "invalid": "validation",
+        "timeout": "timeout",
+        "rejected": "rejection",
+        "stale": "outdated"
+      },
+      "error_state_values": [
+        "firing",
+        "down",
+        "failed",
+        "error",
+        "unhealthy",
+        "degraded",
+        "unavailable",
+        "unreachable",
+        "critical"
+      ],
+      "state_field_names": [
+        "state",
+        "status",
+        "health",
+        "condition"
+      ],
+      "exclude_patterns": [
+        "watchdog",
+        "test",
+        "canary"
+      ]
+    }
+  }

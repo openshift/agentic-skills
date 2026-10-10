@@ -1,0 +1,176 @@
+# config/yaml_processing.yaml
+
+
+# CHUNKING CONFIGURATION
+
+chunking:
+  # Indentation settings
+  max_items_section_indent: 2        # Max indent to recognize 'items:' as list container
+  list_item_indent_offset: 2         # Expected indent after 'items:'
+  indent_tolerance: 2                # Tolerance when matching list item indents
+  top_level_indent: 0                # Indent that marks top-level keys
+  
+  # What triggers a new chunk
+  chunk_separators:
+    - "---"                          # YAML document separator
+  
+  # Keys that indicate list container (case-insensitive)
+  list_container_keys:
+    - "items"
+    - "objects"                      # Some CRDs use 'objects'
+
+
+# CRITICAL FIELDS CONFIGURATION
+
+critical_fields:
+  # Default fields to extract when no specific config exists
+  default_paths:
+    - "metadata.name"
+    - "metadata.namespace"
+    - "status.conditions"
+    - "status.phase"
+  
+  # File-specific configurations
+  file_specific:
+    # Cluster operators
+    clusteroperators.yaml:
+      paths:
+        - "metadata.name"
+        - "status.conditions"
+        - "status.versions"
+      
+    # Cluster versions
+    clusterversions.yaml:
+      paths:
+        - "metadata.name"
+        - "status.history"
+        - "status.conditions"
+        - "status.desired.version"
+    
+    # Networking files
+    networks.yaml:
+      paths:
+        - "metadata.name"
+        - "spec.clusterNetwork"
+        - "spec.serviceNetwork"
+        - "spec.networkType"
+        - "status.conditions"
+        - "status.clusterNetworkMTU"
+    
+    ingresses.yaml:
+      paths:
+        - "metadata.name"
+        - "spec.domain"
+        - "spec.loadBalancer"
+        - "status.componentRoutes[].conditions"
+        - "status.defaultPlacement"
+
+    events.yaml:
+      paths:
+        - "metadata.namespace"
+        - "type"
+        - "reason"
+        - "message"
+        - "count"
+        - "involvedObject.kind"
+        - "involvedObject.name"
+
+
+# ERROR PATTERN DETECTION CONFIGURATION
+
+error_patterns:
+  # Verbose error patterns for rare anomaly detection
+  verbose_patterns:
+    - "not progressing"
+    - "not available"
+    - "not ready"
+    - "not healthy"
+    - "halted"
+    - "stopped"
+    - "paused"
+    - "suspended"
+    - "blocked"
+    - "broken"
+    - "degraded"
+    - "unhealthy"
+    - "unavailable"
+    - "down"
+    - "timeout"
+    - "timed out"
+    - "expired"
+    - "unable to reach"
+    - "cannot connect"
+    - "connection refused"
+    - "connection failed"
+    - "out of memory"
+    - "out of disk"
+    - "resource exhausted"
+    - "quota exceeded"
+    - "missing"
+    - "not found"
+    - "not exist"
+    - "does not exist"
+    - "denied"
+    - "forbidden"
+    - "unauthorized"
+    - "access denied"
+    - "permission denied"
+    - "rejected"
+    - "not allowed"
+    - "stuck"
+    - "hung"
+    - "deadlock"
+    - "waiting"
+    - "pending too long"
+    - "retry failed"
+    - "retries exhausted"
+    - "max retries"
+  
+  # Explicit error keywords (high priority)
+  explicit_keywords:
+    - "error"
+    - "failed"
+    - "failure"
+    - "exception"
+    - "critical"
+    - "fatal"
+  
+  # Field names to exclude from error detection (metadata/config, not errors)
+  excluded_key_patterns:
+    - "failure-domain"           # Topology labels (AWS region/zone)
+    - "topology.kubernetes.io"   # Kubernetes topology labels
+    - "node.kubernetes.io"       # Node labels/annotations
+    - "failurepolicy"           # Webhook failure policy config
+
+# CLASSIFICATION THRESHOLDS
+
+classification:
+  # Percentage of objects needed to be considered "common" (Majority Error)
+  # Objects with error patterns below this are "Error" (rare anomaly)
+  common_pattern_threshold: 0.30  # 30% of objects
+  
+  # Percentage needed to be considered "Majority" (normal/healthy)
+  majority_threshold: 0.10  # 10% frequency
+  
+  # Low frequency threshold for "Error" classification
+  error_threshold: 0.05  # 5% frequency
+
+# OUTPUT CONTROL FLAGS
+
+output_flags:
+  # Which classification categories to include in aggregated output JSON
+  include_errors: true              # Rare pattern errors 
+  include_majority_errors: true     # High frequency errors 
+  include_config_changes: true      # Configuration changes 
+  include_normal_reports: false     # Normal/healthy objects 
+  
+  # Optional: Limit instances per pattern (0 = unlimited, return all)
+  max_instances_per_pattern: 0      # For future use with large clusters
+  
+  # Summary information
+  include_summary: true              # Add summary counts per file
+
+# Base directory configuration
+base_directory:
+  # Path to must-gather root (leave empty to use current directory)
+  must_gather_path: ""  # Empty = use current working directory
