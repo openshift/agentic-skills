@@ -24,7 +24,7 @@ if [[ -n "$OPERATOR_NAME" ]]; then
       available: (.status.conditions[] | select(.type=="Available") | .status == "True"),
       progressing: (.status.conditions[] | select(.type=="Progressing") | .status == "True"),
       degraded: (.status.conditions[] | select(.type=="Degraded") | .status == "True"),
-      versions: [.status.versions[]? | {(.name): .version}] | add // {},
+      versions: ([.status.versions[]? | {(.name): .version}] | add // {}),
       conditions: .status.conditions
     }]
   }'
@@ -39,7 +39,7 @@ else
       available: (.status.conditions[] | select(.type=="Available") | .status == "True"),
       progressing: (.status.conditions[] | select(.type=="Progressing") | .status == "True"),
       degraded: (.status.conditions[] | select(.type=="Degraded") | .status == "True"),
-      versions: [.status.versions[]? | {(.name): .version}] | add // {}
+      versions: ([.status.versions[]? | {(.name): .version}] | add // {})
     }],
     summary: {
       total: (.items | length),
