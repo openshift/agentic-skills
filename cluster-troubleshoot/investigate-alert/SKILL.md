@@ -28,7 +28,7 @@ description: Investigate one or more firing OpenShift alerts to determine root c
 
 # Tools
 
-The `scripts/` directory contains diagnostic scripts. All output JSON to stdout and return structured error objects on failure, except `prometheus-setup.sh` which prints shell export commands for `eval`. Run `eval $(bash scripts/prometheus-setup.sh)` once per session before using Prometheus tools.
+The `scripts/` directory contains diagnostic scripts. All output JSON to stdout and return structured error objects on failure, except `prometheus-setup.sh` which prints shell export commands for `eval`. Run setup in the same shell invocation as each Prometheus tool, because exports may not persist between tool calls. For example: `eval "$(bash scripts/prometheus-setup.sh)" && bash scripts/query-alert.sh <ALERT_NAME>`.
 
 ## Prometheus
 
@@ -61,15 +61,10 @@ Determine the scope of the alerts: is it one pod, one node, one namespace, or cl
 
 ### Step 2 — Set up and query the alerts
 
-Configure Prometheus access:
-```bash
-eval $(bash scripts/prometheus-setup.sh)
-```
-
 For each alert provided:
 ```bash
-bash scripts/query-alert.sh <ALERT_NAME>
-bash scripts/fetch-alert-rule.sh <ALERT_NAME>
+eval "$(bash scripts/prometheus-setup.sh)" && bash scripts/query-alert.sh <ALERT_NAME>
+eval "$(bash scripts/prometheus-setup.sh)" && bash scripts/fetch-alert-rule.sh <ALERT_NAME>
 ```
 Extract the full label set (namespace, pod, node, service, severity, etc.) from firing instances. Even if an alert is NOT firing, fetch the rule; the PromQL expression and labels contain diagnostic information.
 
@@ -77,8 +72,8 @@ If the rule is found, check the annotations for `runbook_url`. If present, extra
 
 Run each alert's PromQL expression to see current and recent values:
 ```bash
-bash scripts/prometheus-query.sh '<expr>'
-bash scripts/prometheus-query-range.sh '<expr>'
+eval "$(bash scripts/prometheus-setup.sh)" && bash scripts/prometheus-query.sh '<expr>'
+eval "$(bash scripts/prometheus-setup.sh)" && bash scripts/prometheus-query-range.sh '<expr>'
 ```
 
 ### Step 3 — Collect workload state and logs
@@ -102,7 +97,7 @@ The scripts cover rollouts and image pulls. Also check for: config/secret edits,
 ### Step 5 — Collect all firing alerts for correlation
 
 ```bash
-bash scripts/get-firing-alerts.sh
+eval "$(bash scripts/prometheus-setup.sh)" && bash scripts/get-firing-alerts.sh
 ```
 
 ## Phase 2 — Analyze and diagnose
