@@ -456,14 +456,35 @@ class TestCmdOlmCheck(unittest.TestCase):
         self.assertIn("error", output["results"][1])
 
 
+class TestApiSearchFallback(unittest.TestCase):
+    """Tests for api_search fallback to local file when API is unreachable."""
+
+    def test_fallback_to_local_on_connectivity_failure(self):
+        """When API is unreachable, api_search falls back to search_local."""
+        import tempfile
+        test_data = {"data": [SAMPLE_PRODUCT]}
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+
+        try:
+            with patch.object(plc_lookup.search_local, "__defaults__", (None, temp_path)):
+                result = plc_lookup.api_search(name="logging", url="http://nonexistent.invalid")
+                self.assertEqual(len(result), 1)
+                self.assertEqual(result[0]["name"], "logging for Red Hat OpenShift")
+        finally:
+            os.unlink(temp_path)
+
+
 class TestApiSearchErrors(unittest.TestCase):
     """Tests for api_search error handling at the external boundary."""
 
     def test_url_error_produces_json(self):
         with patch.object(plc_lookup.urllib.request, "urlopen",
                           side_effect=plc_lookup.urllib.error.URLError("connection refused")):
-            with self.assertRaises(SystemExit) as ctx:
-                plc_lookup.api_search(name="test")
+            with patch.object(plc_lookup.search_local, "__defaults__", (None, "invalid-path")):
+                with self.assertRaises(SystemExit) as ctx:
+                    plc_lookup.api_search(name="test")
             error = json.loads(str(ctx.exception))
             self.assertEqual(error["error"], "api_request_failed")
             self.assertIn("connection refused", error["detail"])
@@ -604,6 +625,172 @@ class TestLiveAPI(unittest.TestCase):
             f"OCP should have former_names, got: {all_former}",
         )
 
+class TestSearchLocal(unittest.TestCase):
+    def test_missing_file(self):
+        """File doesn't exist → SystemExit with file_open_error."""
+        with self.assertRaises(SystemExit) as ctx:
+            plc_lookup.search_local(path="/nonexistent/path.json")
+        error = json.loads(str(ctx.exception))
+        self.assertEqual(error["error"], "file_open_error")
+        self.assertIn("detail", error)
+
+    def test_malformed_json(self):
+        """Invalid JSON → SystemExit with invalid_products_file."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            f.write("not valid json {")
+            temp_path = f.name
+        try:
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.search_local(path=temp_path)
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "invalid_products_file")
+        finally:
+            os.unlink(temp_path)
+
+    def test_missing_data_key(self):
+        """Valid JSON but no 'data' key → SystemExit with malformatted_products_file."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump({"results": []}, f)
+            temp_path = f.name
+        try:
+            with self.assertRaises(SystemExit) as ctx:
+                plc_lookup.search_local(path=temp_path)
+            error = json.loads(str(ctx.exception))
+            self.assertEqual(error["error"], "malformatted_products_file")
+        finally:
+            os.unlink(temp_path)
+
+    def test_success_all_products(self):
+        """name=None → returns all products."""
+        import tempfile
+        test_data = {"data": [SAMPLE_PRODUCT, SAMPLE_PRODUCT_DUPLICATE_PKG]}
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+        try:
+            result = plc_lookup.search_local(name=None, path=temp_path)
+            self.assertEqual(len(result), 2)
+            self.assertEqual(result[0]["name"], "logging for Red Hat OpenShift")
+        finally:
+            os.unlink(temp_path)
+
+    def test_success_filter_by_name(self):
+        """name='logging' → returns only matching products."""
+        import tempfile
+        test_data = {"data": [SAMPLE_PRODUCT, SAMPLE_PRODUCT_DUPLICATE_PKG]}
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+        try:
+            result = plc_lookup.search_local(name="logging", path=temp_path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], "logging for Red Hat OpenShift")
+        finally:
+            os.unlink(temp_path)
+
+    def test_case_insensitive_search(self):
+        """Search is case-insensitive."""
+        import tempfile
+        test_data = {"data": [SAMPLE_PRODUCT]}
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+        try:
+            result = plc_lookup.search_local(name="LOGGING", path=temp_path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], "logging for Red Hat OpenShift")
+        finally:
+            os.unlink(temp_path)
+
+    def test_no_matches(self):
+        """No matches → empty data list."""
+        import tempfile
+        test_data = {"data": [SAMPLE_PRODUCT]}
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+        try:
+            result = plc_lookup.search_local(name="nonexistent", path=temp_path)
+            self.assertEqual(result, [])
+        finally:
+            os.unlink(temp_path)
+
+    def test_no_duplicate_results(self):
+        """No duplicated results when multiple search terms match same result"""
+        import tempfile
+
+        product_a = {
+            "name": "new name",
+            "former_names": ["old alias", "another alias"],
+        }
+
+        test_data = {"data": [SAMPLE_PRODUCT, product_a]}
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+
+        try:
+            # Name match exists: former_names ignored
+            result = plc_lookup.search_local(name="logging,openshift", path=temp_path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], SAMPLE_PRODUCT["name"])
+
+            # No name match: fallback to former_names
+            result = plc_lookup.search_local(name="old,another", path=temp_path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], product_a["name"])
+
+        finally:
+            os.unlink(temp_path)
+
+
+    def test_former_names_fallback_logic(self):
+        """
+        Former names fallback:
+        - Only used when name search returns 0 results
+        - Ignored when name matches exist
+        - Empty former_names arrays don't crash
+        """
+        import tempfile
+
+        product_a = {
+            "name": "new bar",
+            "former_names": ["bear"],
+        }
+        product_b = {
+            "name": "foo two",
+            "former_names": ["new foo", "old foo"],
+        }
+        product_c = {
+            "name": "bar",
+            "former_names": [],  # Empty former_names
+        }
+
+        test_data = {"data": [product_a, product_b, product_c]}
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(test_data, f)
+            temp_path = f.name
+
+        try:
+            # Name match exists: former_names ignored
+            result = plc_lookup.search_local(name="new", path=temp_path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], "new bar")
+
+            # No name match: fallback to former_names
+            result = plc_lookup.search_local(name="old", path=temp_path)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], "foo two")
+
+            # No match in either: empty results
+            result = plc_lookup.search_local(name="nonexistent", path=temp_path)
+            self.assertEqual(len(result), 0)
+        finally:
+            os.unlink(temp_path)
 
 if __name__ == "__main__":
     unittest.main()
