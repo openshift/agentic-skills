@@ -1,108 +1,103 @@
 ---
 name: product-lifecycle
-description: Query Red Hat Product Life Cycle data for support phases, end-of-life dates, and OpenShift version compatibility. Use when evaluating whether installed operators or layered products are supported on a given OCP version, approaching end of life, or need upgrading before a cluster upgrade. Also use when the user asks about product support status, EOL dates, or lifecycle phases for any Red Hat product.
+description: Query Red Hat Product Life Cycle data for support phases, end-of-life dates, and OpenShift version compatibility, and work out which operator versions, catalog sources and channels to use to reach a target OCP version. Use when evaluating whether installed operators or layered products are supported on a given OCP version, approaching end of life, or need upgrading before a cluster upgrade. Also use when the user asks about product support status, EOL dates, or lifecycle phases for any Red Hat product.
 license: Apache-2.0
-compatibility: Requires Python 3 and network access to query https://access.redhat.com/product-life-cycles/api/v2/products
+compatibility: Requires Python 3 (stdlib only) and network access to https://access.redhat.com/product-life-cycles/api/v2/products. `olm-check --olmv0` additionally requires `oc` on PATH with cluster access, to read PackageManifests.
 ---
 
 # Red Hat Product Life Cycle
 
-Query the Red Hat Product Life Cycle API to check support status, EOL dates, and OpenShift compatibility for Red Hat products and layered operators.
+All queries go through `product-lifecycle/scripts/plc_lookup.py`, a standalone Python 3
+script. Both commands print JSON to stdout. Run with `-h` for full usage.
 
-## CLI Tool
-
-All queries go through `product-lifecycle/scripts/plc_lookup.py` — a standalone
-Python 3 script with no dependencies beyond stdlib. Run with `-h` for full usage:
+## `products` — look up a product by name
 
 ```bash
-python3 product-lifecycle/scripts/plc_lookup.py -h
-```
-
-### Commands
-
-#### `products` — Query products by name
-
-```bash
-# Look up a product
-python3 product-lifecycle/scripts/plc_lookup.py products "logging for Red Hat OpenShift"
-
-# With OCP compatibility check
 python3 product-lifecycle/scripts/plc_lookup.py products "logging for Red Hat OpenShift" --ocp 4.21
-
-# Look up OCP itself
-python3 product-lifecycle/scripts/plc_lookup.py products "Red Hat OpenShift Container Platform"
 ```
 
-Returns matching product versions with support status, OCP compatibility,
-and lifecycle phase dates. When `--ocp` is provided, adds `ocp_target` and
-`ocp_compatible` (true/false/null) to each version entry.
+Substring match on the product name — be specific, or the result set is large.
+Returns `{"results": [...], "total": N}`, plus `ocp_target` when `--ocp` is given. Each
+result carries `product`, `former_names`, `package`, `version`, `status`, `ocp_versions`,
+`phases`, and — with `--ocp` — `ocp_compatible`.
 
-Be specific with product names to avoid overly broad results.
-
-#### `olm-check` — Batch check OLM operators
+## `olm-check` — check installed OLM operators against a target OCP version
 
 ```bash
-python3 product-lifecycle/scripts/plc_lookup.py olm-check --ocp 4.21 \
-  --operators '[{"package":"cluster-logging","version":"6.5.1"},{"package":"web-terminal"}]'
+python3 product-lifecycle/scripts/plc_lookup.py olm-check --ocp 4.21 --compatibleonly \
+  --olmv0 '[{"package":"cluster-logging","version":"5.9.14"},{"package":"web-terminal"}]' \
+  --olmv1 '[{"package":"quay-operator","version":"3.11.0"}]'
 ```
 
-Looks up each operator by its OLM `package` name. Each operator in the
-JSON array accepts `package` (required) and `version` (optional).
+| Flag | Required | Meaning |
+|---|---|---|
+| `--ocp` | yes | Target OCP version, major.minor (`4.21`) |
+| `--olmv0` | one of the two | JSON array of Subscription-managed (OLM classic) operators |
+| `--olmv1` | one of the two | JSON array of ClusterExtension-managed operators |
+| `--compatibleonly` | no | Restrict output to versions compatible with `--ocp` |
 
-Returns **one result per operator**. The shape depends on whether a
-`version` was provided:
+Array entries take `package` (required — the OLM package name, i.e. a Subscription's
+`spec.name`) and `version` (optional). Supply `version` whenever it is known: without it
+the tool only answers "what can run on the target OCP" and emits no `ocp_compatible`
+verdict.
 
-- **With version (matched):** `package`, `requested_version`, `product`,
-  `status`, `ocp_compatible`, `phases`. No `error` field.
-- **Without version (package exists):** `package`, `product`,
-  `available_versions`. No `error` field.
-- **Error:** `error` field set — explains what went wrong (package not
-  found, version not tracked). Includes `available_versions` when the
-  package exists but the version doesn't.
+**Pass `--compatibleonly` for upgrade planning.** Without it the tool reports every
+version the PLC API tracks and every catalog version it found — a full inventory, but not
+narrowed to the versions that reach the target OCP — and it suppresses the
+reachable-upgrade output described below.
 
-When a version is provided, the tool normalizes it to major.minor
-(e.g. `1.9.0` → `1.9`) and matches against API version names.
+**`--olmv0` reads the cluster.** It runs `oc get packagemanifests.packages.operators.coreos.com -A -o json`
+to learn which catalog sources carry each package, which versions each carries, and which
+channels expose each version. If that call fails or times out the run still completes:
+lifecycle data is returned, a top-level `packagemanifest_error` explains the failure, and
+no `source_catalogs` appear. `--olmv1` entries are lifecycle-only and never carry
+`source_catalogs`.
 
-Reports `lifecycle_unavailable` listing every operator whose result has `error` set.
+### Output
 
+Top level: `ocp_target`, `operators_checked`, `lifecycle_unavailable` (packages whose
+result has an `error`), `results`, and `packagemanifest_error` when the PackageManifest
+lookup failed.
 
-## Output Format
+| Field in `results[]` | Present when | Description |
+|---|---|---|
+| `package` | always | OLM package name queried |
+| `error` | lookup failed | Package not in PLC API, version not tracked, or empty package name |
+| `requested_version` | `version` supplied | Version normalized to major.minor (`1.9.0` → `1.9`, leading `v` stripped) |
+| `product` | package found | PLC product name |
+| `status` | `version` supplied | Support status, e.g. `Full Support`, `Maintenance Support`, `End of life` |
+| `ocp_compatible` | `version` supplied | `true` / `false` / `null` (PLC tracks no compatibility for that version) |
+| `ocp_versions` | `version` supplied | OCP versions the requested version supports |
+| `phases` | `version` supplied | Lifecycle phases with `name`, `start_date`, `end_date` |
+| `available_versions` | no version supplied, `ocp_compatible: false`, or version untracked | Compatible PLC major.minor versions (`6.5`) to move to |
+| `source_catalogs` | OLMv0 only, alongside `available_versions` | Catalogs, channels and full SemVer versions providing them |
 
-All commands output JSON.
+When `ocp_compatible` is `true` no upgrade guidance is emitted, because none is needed.
+When it is `false` (with `--compatibleonly`), `source_catalogs` is filtered to versions
+that are both compatible with the target OCP **and** strictly higher by SemVer precedence
+than the supplied version — so everything listed is reachable by an upgrade rather than a
+downgrade. It is omitted entirely if no such version exists in any catalog.
 
-### `products` output
+`source_catalogs` entry shape:
 
-Each product version entry includes `product`, `former_names`, `package`,
-`version`, `status`, `ocp_versions`, `ocp_compatible`, and `phases`.
+```json
+{
+  "catalog": "redhat-operators",
+  "catalog_namespace": "openshift-marketplace",
+  "versions": {
+    "6.5.1": {"channels": ["stable-6.5"], "bundle": "cluster-logging.v6.5.1"}
+  }
+}
+```
 
-### `olm-check` output
+## Caveats
 
-One entry per operator:
-
-| Field | Description |
-|---|---|
-| `package` | OLM package name queried |
-| `requested_version` | Normalized version checked (when provided) |
-| `error` | Why data is unavailable — absent on success, set on failure |
-| `product` | Product name (on success) |
-| `status` | Raw API support status, e.g. `"Full Support"`, `"End of life"` (on success) |
-| `ocp_compatible` | `true`/`false`/`null` — whether the version is compatible with the target OCP (on success) |
-| `phases` | Lifecycle phases with `name`, `start_date`, `end_date` (on success) |
-| `available_versions` | Versions the API does track (when package exists but version doesn't) |
-
-## When to Use
-
-- **Upgrade readiness**: check if installed operators are compatible with the
-  target OCP version before upgrading
-- **EOL planning**: identify products approaching or past end of life
-- **Support status**: determine current support phase for any Red Hat product
-- **Cross-reference with update-advisor**: when `olm_operator_lifecycle` data
-  is present in readiness JSON, use `olm-check` to verify lifecycle status
-
-## Important
-
-- `ocp_versions` is only present on **layered product** versions, not on OCP itself.
-- Not all operators have lifecycle entries — `olm-check` sets `error` on the
-  result for operators without data.
-- The `package` field in API responses maps to the OLM Subscription's
-  `spec.name` — use this for exact matching, not product name.
+- `ocp_versions` exists only on **layered product** versions, not on OCP itself.
+- Match on `package`, never on product name. One PLC product may list several
+  comma-separated packages; each is matched independently.
+- Not every operator has a lifecycle entry; those get `error` and are listed in
+  `lifecycle_unavailable`.
+- PLC tracks compatibility at major.minor granularity only. Catalog data carries full
+  SemVer, so one compatible major.minor can map to several installable patch versions.
+- A package can be served by more than one catalog source; each is a separate
+  `source_catalogs` entry, and the same version may appear in several channels.
