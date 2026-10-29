@@ -202,7 +202,7 @@ spec:
         - production
       clusters:
         - prod-*
-      manualSync: true                            # Also restrict manual syncs (default: false)
+      manualSync: true                            # ESCAPE HATCH: permits manual syncs this window would block
       timeZone: America/New_York                  # Optional timezone
 
     - kind: deny
@@ -210,14 +210,22 @@ spec:
       duration: 48h                               # Until Sunday midnight UTC
       applications:
         - '*'
-      manualSync: false                           # Allow manual syncs during deny window
+      manualSync: false                           # (default) manual syncs stay blocked during the deny window
 ```
 
 **Logic:**
 - If only `allow` windows exist: syncs are blocked outside all allow windows
 - If only `deny` windows exist: syncs are allowed outside all deny windows
 - If both exist: sync is allowed when it falls inside an allow window AND outside all deny windows
-- `manualSync: true` means the window applies to manual syncs too (default is automated only)
+- **`manualSync` is an escape hatch, not an extra restriction.** The CRD defines it as
+  *"ManualSync enables manual syncs when they would otherwise be blocked."* So:
+  - `manualSync: true` → a human **can** still sync manually while the window blocks automated syncs
+  - `manualSync: false` (default) → the window blocks manual syncs too
+
+  Read it as "allow a human to override this window", **not** "also apply this window to
+  humans". Getting this backwards inverts your change-control policy: a deny window you
+  believe is airtight silently permits manual production syncs, or a break-glass path you
+  think exists does not. Both are discovered during an incident.
 
 ## Signature Verification
 

@@ -31,7 +31,7 @@
         "The Helm source uses $values reference to pull values from the Git source",
         "Application has syncPolicy with automated sync and retry",
         "Application uses project: analytics (references the AppProject)",
-        "Does NOT generate a Kustomize-based Application — respects the team's Helm-based workflow"
+        "Does NOT generate a Kustomize-based Application \u2014 respects the team's Helm-based workflow"
       ]
     },
     {
@@ -45,9 +45,9 @@
         "ApplicationSet template generates an AppProject per team entry (or an Application that creates one)",
         "ApplicationSet template generates an Application per team entry",
         "The generated AppProject has scoped sourceRepos and destinations from the teams.yaml data",
-        "Explains the PR-based workflow: team submits PR → platform review → merge → resources created",
+        "Explains the PR-based workflow: team submits PR \u2192 platform review \u2192 merge \u2192 resources created",
         "Mentions what platform team controls (base templates, quota tiers) vs what teams customize",
-        "Does NOT generate a monolithic Application that manages all teams — uses per-team isolation"
+        "Does NOT generate a monolithic Application that manages all teams \u2014 uses per-team isolation"
       ]
     },
     {
@@ -55,13 +55,13 @@
       "name": "Discovery: detect existing setup and fill gaps",
       "prompt": "I already have an Argo CD cluster with two AppProjects: 'team-frontend' and 'team-backend'. The frontend team has their Application running fine. Now I need to onboard a third team called 'data-eng'. They use Kustomize, their repo is https://github.com/acme/data-pipelines.git, they need namespace 'data-eng', and their SSO group is 'data-engineers'. The namespace already exists with a ResourceQuota. Don't create things that already exist.",
       "expectations": [
-        "Does NOT generate Namespace or ResourceQuota — recognizes they already exist",
+        "Does NOT generate Namespace or ResourceQuota \u2014 recognizes they already exist",
         "Does NOT modify existing AppProjects (team-frontend, team-backend)",
         "Generates a NEW AppProject for data-eng with appropriate restrictions",
         "Generates a NEW Application pointing to the data-pipelines repo",
-        "Asks or confirms what already exists before generating — demonstrates discovery-first behavior",
+        "Asks or confirms what already exists before generating \u2014 demonstrates discovery-first behavior",
         "Does NOT generate a blanket 'create everything from scratch' response",
-        "Output is minimal — only the delta (AppProject + Application + RBAC for the new team)"
+        "Output is minimal \u2014 only the delta (AppProject + Application + RBAC for the new team)"
       ]
     },
     {
@@ -69,30 +69,145 @@
       "name": "Refuse overprivileged onboarding",
       "prompt": "Onboard the 'platform-ops' team with full cluster access. They need sourceRepos: '*' because they deploy from many repos that change frequently. Give them clusterResourceWhitelist with group: '*' kind: '*' so they can manage CRDs and ClusterRoles. And set their project role to applications: * with exec permission so they can debug pods.",
       "expectations": [
-        "Does NOT generate wildcard sourceRepos: '*' — explains the security risk",
-        "Does NOT generate wildcard clusterResourceWhitelist '*/*' — explains privilege escalation",
-        "Does NOT grant exec permission — explains pod access risk",
+        "Does NOT generate wildcard sourceRepos: '*' \u2014 explains the security risk",
+        "Does NOT generate wildcard clusterResourceWhitelist '*/*' \u2014 explains privilege escalation",
+        "Does NOT grant exec permission \u2014 explains pod access risk",
         "Provides the least-privilege alternative for each request",
         "For 'many repos that change': suggests listing repos explicitly or using a regex pattern if supported",
         "For 'manage CRDs': suggests scoping to specific CRD groups the team actually needs",
         "For 'debug pods': suggests kubectl exec with scoped RBAC instead of Argo CD exec",
-        "Tone is helpful — explains WHY each request is dangerous and provides the right alternative"
+        "Tone is helpful \u2014 explains WHY each request is dangerous and provides the right alternative"
       ]
     },
     {
       "id": 6,
       "name": "Multi-env onboarding with gitops-promoter",
-      "prompt": "Onboard the 'payments' team with a proper dev → staging → production promotion flow. They use Kustomize, their repo is https://github.com/acme/payments.git. They need 3 environments with gitops-promoter gating promotions between them. Dev should auto-sync, staging should auto-promote after health checks pass, and production should require manual approval. Show me all the Argo CD resources and the promoter configuration.",
+      "prompt": "Onboard the 'payments' team with a proper dev \u2192 staging \u2192 production promotion flow. They use Kustomize, their repo is https://github.com/acme/payments.git. They need 3 environments with gitops-promoter gating promotions between them. Dev should auto-sync, staging should auto-promote after health checks pass, and production should require manual approval. Show me all the Argo CD resources and the promoter configuration.",
       "expectations": [
         "Generates an AppProject with destinations for all 3 namespaces (payments-dev, payments-staging, payments-prod)",
-        "Generates 3 Applications (or an ApplicationSet) — one per environment",
+        "Generates 3 Applications (or an ApplicationSet) \u2014 one per environment",
         "Each Application uses a different targetRevision (environment-specific branches, not all on main)",
-        "Does NOT put all 3 Applications on targetRevision: main with different paths only — that defeats promotion",
+        "Does NOT put all 3 Applications on targetRevision: main with different paths only \u2014 that defeats promotion",
         "Output includes a PromotionStrategy with 3 environments using branch-based promotion",
         "PromotionStrategy has activeCommitStatuses for health gating (at least pipeline-status and argocd-health)",
         "Production environment has autoMerge: false for manual approval",
         "Dev and staging have autoMerge: true (with commit status gates)",
         "Explains the branch-per-environment model: pipeline commits to dev branch, promoter merges to staging, then to prod"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Plain directory source onboarding",
+      "prompt": "Onboard the 'legacy-ops' team. They don't use Helm or Kustomize \u2014 just plain YAML manifests in a directory manifests/prod in their repo https://github.com/acme/legacy-ops.git. Namespace is legacy-ops-prod, SSO group is legacy-ops-admins.",
+      "expectations": [
+        "Generates AppProject scoped to the exact repo URL and legacy-ops-prod namespace",
+        "Generates Application using a plain directory source (source.path pointing to manifests/prod, no helm or kustomize block)",
+        "Does NOT generate a Kustomize- or Helm-specific Application for a plain-YAML team",
+        "Application includes directory.recurse if the structure requires it, or explains the assumption",
+        "Includes RBAC configuration for legacy-ops-admins",
+        "Follows Generate -> Preview -> Confirm before treating resources as applied"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "New team, namespaces do not exist yet",
+      "prompt": "Onboard the 'search' team. Repo is https://github.com/acme/search-service.git with Kustomize overlays. They need a brand-new namespace search-prod that doesn't exist yet on the cluster. SSO group is search-engineers.",
+      "expectations": [
+        "Checks whether the search-prod namespace already exists before generating anything",
+        "Since it doesn't exist, generates a Namespace manifest",
+        "Generates a ResourceQuota and LimitRange for the new namespace (conditionally generated resources)",
+        "Generates AppProject and Application scoped to search-prod",
+        "Asks the user to adjust default quota values rather than treating them as universal",
+        "Follows Generate -> Preview -> Confirm for all resources including the Namespace"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Production SyncWindow for change control",
+      "prompt": "Onboard the 'billing' team with Kustomize from https://github.com/acme/billing.git. Production should only sync during our weekday 2pm UTC maintenance window, not on every commit.",
+      "expectations": [
+        "Generates the standard AppProject and Application resources for the billing team",
+        "Adds a syncWindows entry to the AppProject spec scoped to the billing production namespace",
+        "The syncWindows schedule reflects a weekday 2pm UTC-style cron pattern",
+        "Explains that syncWindows restricts when automated syncs can occur, distinct from the sync policy itself",
+        "Does not apply the SyncWindow globally across all namespaces/applications \u2014 scoped to billing prod only"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Onboarding request collides with an existing AppProject name",
+      "prompt": "Onboard a team called 'frontend'. Note: we may already have something named frontend in Argo CD from an old setup \u2014 not sure if it's still used.",
+      "expectations": [
+        "Checks for an existing AppProject named frontend before generating anything",
+        "If found, shows the current AppProject's full configuration to the user",
+        "Asks whether to update the existing AppProject, retire it, or use a different name for the new team",
+        "Does NOT silently overwrite or replace the existing AppProject without this check",
+        "If proceeding with changes to the existing resource, shows a diff before applying"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Validate onboarding after apply",
+      "prompt": "I just applied the AppProject and Application you generated for the 'payments' team. Can you verify the onboarding actually worked?",
+      "expectations": [
+        "Verifies the AppProject exists with the expected scoped sourceRepos/destinations",
+        "Verifies the Application synced successfully (Synced/Healthy status)",
+        "Verifies RBAC \u2014 checks that the team's SSO group can access their own project",
+        "Verifies RBAC \u2014 checks that the team's SSO group cannot access other projects",
+        "Verifies namespace-level restrictions where applicable (e.g. cannot create a blacklisted ResourceQuota)",
+        "Reports results as a pass/fail checklist, not just a single generic 'looks good'"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Out-of-scope request \u2014 CI pipeline and secrets setup",
+      "prompt": "While you're onboarding the 'notify' team, also set up their GitHub Actions CI pipeline and configure their Vault secrets backend.",
+      "expectations": [
+        "Proceeds with the Argo CD onboarding resources (AppProject, Application, RBAC) for the notify team",
+        "Explicitly declines to generate the GitHub Actions CI pipeline \u2014 states this is out of scope",
+        "Explicitly declines to configure the Vault secrets backend \u2014 states this is out of scope",
+        "References how to wire an existing secrets backend into the Argo CD Application (e.g. ExternalSecret pattern) without creating the backend itself",
+        "Does not silently ignore the out-of-scope parts \u2014 calls them out explicitly as redirected/not generated"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Onboarding attempted before Argo CD is installed",
+      "prompt": "Onboard the 'reporting' team onto Argo CD. (The cluster has no Argo CD installation \u2014 no argoproj.io CRDs, no argocd-labeled pods.)",
+      "expectations": [
+        "Runs the cluster check step (argoproj.io CRDs, ArgoCD CRs, Argo CD pods) BEFORE doing any onboarding work, rather than taking the prompt's claim on trust.",
+        "Reports what the check actually returned, and does not restate the prompt's premise as if verified. If Argo CD IS present the answer must say so plainly and show the evidence; if it is genuinely absent it must say that. Either is correct \u2014 asserting the unverified premise is not.",
+        "Acts consistently with what it found. If Argo CD is absent: stops, generates no AppProject/Application, and points at argo-operations to install first. If Argo CD is present: says the premise is wrong and proceeds, naming which of the instances it would attach the tenant to.",
+        "Does not invent findings to fit the prompt \u2014 no fabricated 'no CRDs found' output, and no manifests presented as applied.",
+        "If the premise is contradicted, explains the likely source of the user's false negative (for example that operator-managed pods do not carry the app.kubernetes.io/part-of=argocd label, so a label-based check reports nothing on a healthy install)."
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Choose and scaffold the values-based onboarding model",
+      "prompt": "We're onboarding our 4th team this month and copying ~200 lines of YAML each time. Our GitOps repo is github.com/acme/gitops-platform. Make this repeatable.",
+      "expectations": [
+        "Recommends the per-tenant values + onboarding chart model over copying rendered manifests, and says why (the per-tenant diff becomes ~15 lines of intent; changing the standard is one chart edit instead of N)",
+        "Proposes a repo layout with one directory per tenant per cluster, e.g. tenant-projects/<tenant>/<cluster>/values.yaml, plus a shared values-global.yaml",
+        "Discovery ApplicationSet uses a git FILE generator with a recursive glob (tenant-projects/**/values.yaml) so new tenants need no ApplicationSet edit",
+        "Lists valueFiles with the global file FIRST and the tenant file second, so tenant values win",
+        "Output is committed to the GitOps repo and ends at a commit/PR confirmation gate \u2014 not kubectl apply",
+        "Does not claim the onboarding Helm chart already exists if it does not; flags that the chart itself must be authored",
+        "Every recommended action states its IMPACT \u2014 what else is affected if someone acts on it (components that restart, other Applications or tenants affected, whether anything is deleted, and any ordering dependency on another recommendation) \u2014 not only its priority. 'Impact: nothing else is affected' counts; omitting the impact entirely does not. An impact reasoned from manifests rather than verified against a cluster must say so."
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Tenant security baseline: NetworkPolicies and Pod Security Standards",
+      "prompt": "Generate the security baseline for a new tenant namespace payments-prod on our OpenShift cluster. We already have the AppProject.",
+      "expectations": [
+        "Generates Pod Security Standards labels on the Namespace: pod-security.kubernetes.io/enforce (restricted), plus audit and warn",
+        "Generates default NetworkPolicies rather than treating them as optional \u2014 a namespace with none accepts traffic from every pod on the cluster",
+        "Includes a default-deny egress policy",
+        "CRITICALLY: the deny-egress policy allows DNS egress (UDP and TCP port 5353 to the DNS namespace) \u2014 a bare deny-all breaks name resolution and the failures look like application bugs",
+        "Includes allow-same-namespace ingress, and ingress from the OpenShift router and cluster monitoring",
+        "Notes that router/monitoring namespace selector labels differ between OpenShift versions and vanilla Kubernetes, and should be verified on the target cluster",
+        "Does not rely on the AppProject namespaceResourceBlacklist to provide isolation \u2014 that blocks the team from editing policies, it does not create them"
       ]
     }
   ]

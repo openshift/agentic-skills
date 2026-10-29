@@ -1,5 +1,20 @@
 # Argo CD Image Updater Reference
 
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 ## Overview
 
 Argo CD Image Updater is a tool that automatically updates container image versions in Argo CD Applications. It watches container registries for new image versions and updates the Application accordingly.
@@ -381,7 +396,7 @@ spec:
 ### Check Image Updater Logs
 
 ```bash
-kubectl -n argocd logs deployment/argocd-image-updater
+kubectl -n "$NS" logs deployment/argocd-image-updater
 ```
 
 ### Common Issues

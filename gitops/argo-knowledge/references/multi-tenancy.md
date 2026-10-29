@@ -1,5 +1,20 @@
 # Argo CD Multi-Tenancy and Multi-Instance Patterns
 
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 Reference for running Argo CD in multi-tenant environments — from single-instance with
 AppProjects to multiple instances and the Applications-in-any-namespace feature.
 
@@ -38,8 +53,8 @@ Supports shell-style wildcards (`app-*`) and regex (`/^((?!excluded).)*$/`).
 
 After changing, restart workloads:
 ```bash
-kubectl rollout restart -n argocd deployment argocd-server
-kubectl rollout restart -n argocd statefulset argocd-application-controller
+kubectl rollout restart -n "$NS" deployment argocd-server
+kubectl rollout restart -n "$NS" statefulset argocd-application-controller
 ```
 
 ### AppProject sourceNamespaces

@@ -1,5 +1,20 @@
 # Progressive Delivery Reference — Promotion, Rollback, and Traffic Management
 
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 Step-by-step procedures for promoting, aborting, and managing Rollouts and Application
 syncs. Every procedure follows the Generate-Preview-Confirm safety model.
 
@@ -91,7 +106,7 @@ kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/rele
 
 4. Preview and apply:
    ```bash
-   kubectl apply --dry-run=server -f rollout.yaml
+   kubectl apply --dry-run=server --validate=strict -f rollout.yaml
    # After confirmation:
    kubectl apply -f rollout.yaml
    ```
@@ -129,7 +144,7 @@ spec:
 ```bash
 # 1. Check current state
 argocd app get <name> 2>/dev/null || \
-  kubectl get application <name> -n argocd -o jsonpath='sync={.status.sync.status} health={.status.health.status}'
+  kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='sync={.status.sync.status} health={.status.health.status}'
 
 # 2. Preview diff
 argocd app diff <name> 2>/dev/null || \
@@ -137,11 +152,11 @@ argocd app diff <name> 2>/dev/null || \
 
 # 3. Sync (after user confirms)
 argocd app sync <name> 2>/dev/null || \
-  kubectl patch application <name> -n argocd --type merge -p '{"operation":{"initiatedBy":{"username":"cli"},"sync":{"revision":"","prune":false}}}'
+  kubectl patch application <name> -n "$NS" --type merge -p '{"operation":{"initiatedBy":{"username":"cli"},"sync":{"revision":"","prune":false}}}'
 
 # 4. Wait for sync to complete
 argocd app wait <name> --timeout 300 2>/dev/null || \
-  echo "Monitor: kubectl get application <name> -n argocd -o jsonpath='{.status.operationState.phase}'"
+  echo "Monitor: kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.status.operationState.phase}'"
 ```
 
 ### Sync with Options
@@ -175,12 +190,20 @@ argocd app sync <name> --retry-limit 3 --retry-backoff-duration 5s
 kubectl argo rollouts get rollout <name> -n <namespace>
 
 # Fallback
-kubectl get rollout <name> -n <namespace> -o jsonpath='{
-  "phase": "{.status.phase}",
-  "currentStep": {.status.currentStepIndex},
-  "stableRS": "{.status.stableRS}",
-  "canaryRS": "{.status.currentPodHash}"
-}'
+# jsonpath has no multi-line/JSON-literal form — a braced block like {"phase": "{...}"}
+# is a parse error on every cluster. Use a flat template:
+kubectl get rollout <name> -n <namespace> -o jsonpath='phase={.status.phase} step={.status.currentStepIndex} stable={.status.stableRS} canary={.status.currentPodHash}{"\n"}'
+
+# A rollout is COMPLETE, not stuck, when step == len(spec.strategy.canary.steps)
+# and stable == canary. Compare them before reporting a stall:
+kubectl get rollout <name> -n <namespace> \
+  -o jsonpath='{.status.currentStepIndex}/{..spec.strategy.canary.steps[*]}{"\n"}' 2>/dev/null
+kubectl get rollout <name> -n <namespace> -o json | python3 -c "
+import json,sys
+r=json.load(sys.stdin); s=r['status']; steps=len(r['spec'].get('strategy',{}).get('canary',{}).get('steps',[]))
+idx=s.get('currentStepIndex')
+print(f\"step {idx}/{steps}\", 'COMPLETE' if idx==steps and s.get('stableRS')==s.get('currentPodHash') else 'in progress/stuck')
+"
 ```
 
 ### Promote (Advance to Next Step)
@@ -195,9 +218,28 @@ kubectl argo rollouts get rollout <name> -n <namespace> | head -20
 # 2. Promote (after user confirms)
 kubectl argo rollouts promote <name> -n <namespace>
 
-# 3. Monitor
-kubectl argo rollouts get rollout <name> -n <namespace> --watch
+# 3. VERIFY — report the resulting phase
+kubectl argo rollouts get rollout <name> -n <namespace> --watch   # Ctrl-C once it settles
+kubectl get rollout <name> -n <namespace> \
+  -o jsonpath='phase={.status.phase} step={.status.currentStepIndex}{"\n"}'
 ```
+
+**Expected end state:** `phase=Progressing` as it re-enters the canary steps, then
+`Healthy`. If it returns straight to `Degraded`, the retry re-ran the same spec against
+the same failing condition.
+
+> **Abort → retry is a loop, not a fix.** `retry` re-runs the *same* spec. If the rollout
+> failed because its analysis genuinely failed — a real regression, a misconfigured
+> metric query, an unreachable Prometheus — retrying reproduces the failure. Before
+> retrying, read why it aborted:
+>
+> ```bash
+> kubectl get analysisrun -n <namespace> \
+>   -l rollouts-pod-template-hash=<hash> -o yaml | grep -A5 'message\|phase'
+> ```
+>
+> Fix the cause, or change the spec, then let the new revision roll. Retry is for
+> transient failures only.
 
 ### Full Promote (Skip All Remaining Steps)
 
@@ -246,10 +288,8 @@ kubectl argo rollouts promote <name> -n <namespace>
 kubectl argo rollouts get rollout <name> -n <namespace>
 
 # Show which ReplicaSet is active vs preview
-kubectl get rollout <name> -n <namespace> -o jsonpath='{
-  "activeRS": "{.status.blueGreen.activeSelector}",
-  "previewRS": "{.status.blueGreen.previewSelector}"
-}'
+kubectl get rollout <name> -n <namespace> -o jsonpath='phase={.status.phase} active={.status.blueGreen.activeSelector} preview={.status.blueGreen.previewSelector}{"
+"}'
 ```
 
 ### Promote Preview to Active
@@ -282,9 +322,15 @@ kubectl argo rollouts get rollout <name> -n <namespace>
 # 2. Abort (after user confirms — destructive, requires resource name confirmation)
 kubectl argo rollouts abort <name> -n <namespace>
 
-# 3. Verify stable is serving
+# 3. VERIFY — and report the resulting phase, not just that the command returned
 kubectl argo rollouts get rollout <name> -n <namespace>
+kubectl get rollout <name> -n <namespace> \
+  -o jsonpath='phase={.status.phase} stable={.status.stableRS} current={.status.currentPodHash}{"\n"}'
 ```
+
+**Expected end state:** `phase=Degraded` with `status.abort: true`, canary ReplicaSet
+scaled to 0, and `stableRS` serving all traffic. State that explicitly in the report —
+"aborted successfully" without the phase is a claim, not a verification.
 
 **After abort:** The Rollout enters `Aborted` phase. To re-deploy, update the Rollout
 spec (e.g., image tag) and it will start a new rollout. Or use `retry`:
@@ -306,9 +352,28 @@ kubectl argo rollouts get rollout <name> -n <namespace>
 # 2. Retry (after user confirms)
 kubectl argo rollouts retry rollout <name> -n <namespace>
 
-# 3. Monitor
-kubectl argo rollouts get rollout <name> -n <namespace> --watch
+# 3. VERIFY — report the resulting phase
+kubectl argo rollouts get rollout <name> -n <namespace> --watch   # Ctrl-C once it settles
+kubectl get rollout <name> -n <namespace> \
+  -o jsonpath='phase={.status.phase} step={.status.currentStepIndex}{"\n"}'
 ```
+
+**Expected end state:** `phase=Progressing` as it re-enters the canary steps, then
+`Healthy`. If it returns straight to `Degraded`, the retry re-ran the same spec against
+the same failing condition.
+
+> **Abort → retry is a loop, not a fix.** `retry` re-runs the *same* spec. If the rollout
+> failed because its analysis genuinely failed — a real regression, a misconfigured
+> metric query, an unreachable Prometheus — retrying reproduces the failure. Before
+> retrying, read why it aborted:
+>
+> ```bash
+> kubectl get analysisrun -n <namespace> \
+>   -l rollouts-pod-template-hash=<hash> -o yaml | grep -A5 'message\|phase'
+> ```
+>
+> Fix the cause, or change the spec, then let the new revision roll. Retry is for
+> transient failures only.
 
 ---
 
@@ -342,7 +407,7 @@ spec:
 
 ```bash
 # Preview
-kubectl apply --dry-run=server -f analysisrun.yaml
+kubectl apply --dry-run=server --validate=strict -f analysisrun.yaml
 
 # Apply (after user confirms)
 kubectl apply -f analysisrun.yaml

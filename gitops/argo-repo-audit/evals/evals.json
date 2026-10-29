@@ -11,13 +11,14 @@
         "Counts Application resources (should find approximately 9)",
         "Counts AppProject resources (should find 2)",
         "Identifies sync policy configuration per Application (which have automated sync, which don't)",
-        "Checks AppProject sourceRepos — identifies whether wildcards are used",
-        "Checks AppProject destinations — identifies whether wildcards are used",
+        "Checks AppProject sourceRepos \u2014 identifies whether wildcards are used",
+        "Checks AppProject destinations \u2014 identifies whether wildcards are used",
         "Checks for ignoreDifferences configuration on Applications that need it",
         "Checks for retry configuration on sync policies",
         "Identifies sync wave ordering via annotations",
         "Produces a structured report with Summary, Best Practices, Security, and Recommendations",
-        "Assigns an overall status (PASS, WARN, or FAIL) based on findings"
+        "Assigns an overall status (PASS, WARN, or FAIL) based on findings",
+        "Every recommended action states its IMPACT \u2014 what else is affected if someone acts on it (components that restart, other Applications or tenants affected, whether anything is deleted, and any ordering dependency on another recommendation) \u2014 not only its priority. 'Impact: nothing else is affected' counts; omitting the impact entirely does not. An impact reasoned from manifests rather than verified against a cluster must say so."
       ]
     },
     {
@@ -32,7 +33,7 @@
         "Checks for preserveResourcesOnDeletion setting",
         "Evaluates template completeness (destination, source, syncPolicy)",
         "Checks for goTemplateOptions (missingkey=error)",
-        "Identifies that ApplicationSets deploy to the default project — flags if concerning",
+        "Identifies that ApplicationSets deploy to the default project \u2014 flags if concerning",
         "Checks whether prune is enabled in generated Applications' sync policy",
         "Produces a structured report with ApplicationSet-specific findings",
         "Includes ApplicationSet-specific recommendations"
@@ -43,7 +44,6 @@
       "name": "mixed-issues-audit",
       "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/mixed-issues/ using the argo-repo-audit skill.",
       "expectations": [
-        "Finds Application, AppProject, Rollout, AnalysisTemplate, Workflow, and WorkflowTemplate resources",
         "Flags the AppProject with wildcard (*) in sourceRepos as Critical security issue",
         "Flags the AppProject with wildcard (*) in destinations as Critical security issue",
         "Flags wildcard clusterResourceWhitelist ('*/*') as Critical",
@@ -53,9 +53,10 @@
         "Flags Application with prune: false (frontend.yaml) as incomplete sync config",
         "Flags Application using targetRevision: HEAD as risky for production",
         "Checks Rollout for AnalysisTemplate with both successCondition and failureCondition",
-        "Checks Workflow for missing activeDeadlineSeconds and resource limits",
-        "Reports overall status as FAIL due to Critical security issues",
-        "Recommendations include at least 3 Critical-severity items"
+        "Reaches and states a clear overall verdict for the repository \u2014 a PASS/WARN/FAIL label or an equivalent unambiguous statement such as 'do not apply as committed'. The specific vocabulary does not matter; giving severity-tiered findings with no overall judgement does not satisfy this.",
+        "Recommendations include at least 3 Critical-severity items",
+        "Every recommended action states its IMPACT \u2014 what else is affected if someone acts on it (components that restart, other Applications or tenants affected, whether anything is deleted, and any ordering dependency on another recommendation) \u2014 not only its priority. 'Impact: nothing else is affected' counts; omitting the impact entirely does not. An impact reasoned from manifests rather than verified against a cluster must say so.",
+        "Does not report the SealedSecret/SOPS-encrypted value as a plaintext credential. Ciphertext stored under a `password:` key is not a plaintext finding, and calling it one is a false positive. If the repo has no encrypted secrets, this expectation is satisfied trivially \u2014 it must not be used to penalise an answer for silence."
       ]
     },
     {
@@ -79,8 +80,8 @@
         "Flags sourceRepos: ['*'] as Critical security issue",
         "Flags destinations with server: '*' and namespace: '*' as Critical",
         "Flags clusterResourceWhitelist with group: '*' kind: '*' as Critical",
-        "Reports overall status as FAIL due to Critical security findings",
-        "Does NOT flag the Application — it has proper syncPolicy, pinned targetRevision, and retry config"
+        "Reaches and states a clear overall verdict for the repository \u2014 a PASS/WARN/FAIL label or an equivalent unambiguous statement such as 'do not apply as committed'. The specific vocabulary does not matter; giving severity-tiered findings with no overall judgement does not satisfy this.",
+        "Does NOT flag the Application \u2014 it has proper syncPolicy, pinned targetRevision, and retry config"
       ]
     },
     {
@@ -88,10 +89,11 @@
       "name": "detect-plain-secret",
       "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/plain-secret/ using the argo-repo-audit skill. This repo has one Application and one plain-text Secret.",
       "expectations": [
-        "Detects kind: Secret (db-credentials.yaml) as Critical security issue — plain-text secret committed to Git",
+        "Detects kind: Secret (db-credentials.yaml) as Critical security issue \u2014 plain-text secret committed to Git",
         "Recommends using SealedSecret, ExternalSecret, SOPS, or Vault instead",
-        "Reports overall status as FAIL due to Critical security finding",
-        "Does NOT flag the Application itself — it has proper syncPolicy"
+        "Reaches and states a clear overall verdict for the repository \u2014 a PASS/WARN/FAIL label or an equivalent unambiguous statement such as 'do not apply as committed'. The specific vocabulary does not matter; giving severity-tiered findings with no overall judgement does not satisfy this.",
+        "Does NOT flag the Application itself \u2014 it has proper syncPolicy",
+        "Does NOT print the credential value anywhere in the answer. The finding is the LOCATION \u2014 file, line and key name are required; the value is not. Reproducing the plaintext, quoting the base64 string, or decoding it to 'confirm' it is a real credential all fail this expectation, because they copy the secret into the transcript. Reporting the value's length, or that it decodes successfully, is fine."
       ]
     },
     {
@@ -101,7 +103,7 @@
       "expectations": [
         "Flags the Application as missing syncPolicy (no automated sync, no prune, no selfHeal)",
         "Recommends adding syncPolicy with automated, prune, selfHeal, and retry",
-        "Severity is Warning (not Critical — missing sync is operational risk, not security vulnerability)",
+        "Rates this below Critical and justifies it: no syncPolicy is an operational gap (manual-only sync, no drift correction, no retry), not a security vulnerability. Warning, Medium or High with that reasoning all satisfy this; Critical does not.",
         "Does NOT produce false positives on other aspects of this Application"
       ]
     },
@@ -113,7 +115,7 @@
         "Flags targetRevision: HEAD as risky for a production Application",
         "Explains the risk: HEAD means any commit to the default branch is immediately synced to production without review",
         "Recommends pinning to a specific tag, commit SHA, or release branch",
-        "Severity is Warning (not Critical — it's a best practice violation, not a security vulnerability)"
+        "Rates the severity and justifies it against the real blast radius: HEAD in production with prune and selfHeal means any unreviewed commit auto-deploys and manual mitigation is reverted. Any tier is acceptable provided the reasoning is given and it is not presented as a security vulnerability; an unjustified label is not."
       ]
     },
     {
@@ -122,35 +124,25 @@
       "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/weak-analysis/ using the argo-repo-audit skill. This repo has a Rollout with a canary strategy and an AnalysisTemplate.",
       "expectations": [
         "Identifies the AnalysisTemplate has successCondition but no failureCondition",
-        "Explains the risk: without failureCondition, the analysis may not fail fast enough on degraded metrics",
+        "Explains the risk of the missing failureCondition CORRECTLY. With successCondition set and failureCondition absent, Argo Rollouts records a measurement that fails the success condition as Failed \u2014 upstream utils/evaluate: 'Without a failure condition, a measurement is considered a failure if the measurement's success condition is not true' \u2014 and failureLimit defaults to 0, so one bad measurement aborts. Asserting the measurement is Inconclusive, or that the analysis never aborts, is factually wrong and fails this expectation. The real gap is the missing count, which leaves the step analysis running indefinitely.",
         "Recommends adding a failureCondition (e.g., result[0] < threshold) and failureLimit",
-        "Does NOT flag the Rollout's canary steps as problematic — the step configuration itself is valid"
+        "Does NOT flag the Rollout's canary steps as problematic \u2014 the step configuration itself is valid"
       ]
     },
     {
       "id": 10,
-      "name": "detect-no-deadline-workflow",
-      "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/no-deadline-workflow/ using the argo-repo-audit skill. This repo has a WorkflowTemplate.",
+      "name": "detect-hardcoded-helm-password",
+      "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/hardcoded-helm-password/ using the argo-repo-audit skill. This repo has one Application that deploys a Redis Helm chart with inline values.",
       "expectations": [
-        "Flags the WorkflowTemplate as missing activeDeadlineSeconds — workflows without a deadline can run indefinitely and consume cluster resources",
-        "Flags the container steps as missing resource requests and limits",
-        "Recommends adding activeDeadlineSeconds at the workflow level and resource limits on each container step",
-        "Does NOT invent issues that aren't present in this specific fixture"
+        "Detects the plaintext password in spec.source.helm.values with file and line, and explains why the PATTERN is the finding independent of this value's severity: inline helm.values renders in the Argo CD UI and API with no Secret RBAC boundary. The fixture value is deliberately marked synthetic (EXAMPLE- prefix, '# notsecret'), so rating it below Critical on that basis is CORRECT and must not be penalised.",
+        "Explains the risk: password is visible in Git history and in the Application resource on the cluster",
+        "Recommends using a valuesFrom Secret reference, Argo CD Vault Plugin, or ExternalSecret instead",
+        "Reaches and states a clear overall verdict for the repository \u2014 a PASS/WARN/FAIL label or an equivalent unambiguous statement such as 'do not apply as committed'. The specific vocabulary does not matter; giving severity-tiered findings with no overall judgement does not satisfy this.",
+        "Does NOT print the credential value anywhere in the answer. The finding is the LOCATION \u2014 file, line and key name are required; the value is not. Reproducing the plaintext, quoting the base64 string, or decoding it to 'confirm' it is a real credential all fail this expectation, because they copy the secret into the transcript. Reporting the value's length, or that it decodes successfully, is fine."
       ]
     },
     {
       "id": 11,
-      "name": "detect-hardcoded-helm-password",
-      "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/hardcoded-helm-password/ using the argo-repo-audit skill. This repo has one Application that deploys a Redis Helm chart with inline values.",
-      "expectations": [
-        "Detects the hardcoded password in helm.values (auth.password: Redis!Pr0d#2026) as Critical security issue",
-        "Explains the risk: password is visible in Git history and in the Application resource on the cluster",
-        "Recommends using a valuesFrom Secret reference, Argo CD Vault Plugin, or ExternalSecret instead",
-        "Reports overall status as FAIL due to Critical security finding"
-      ]
-    },
-    {
-      "id": 12,
       "name": "clean-repo-zero-findings",
       "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/clean-repo/ using the argo-repo-audit skill. This repo should follow best practices.",
       "expectations": [
@@ -161,21 +153,21 @@
         "Recognizes secrets are managed via SealedSecret (not plain-text)",
         "Recognizes the AnalysisTemplate has both successCondition and failureCondition with failureLimit",
         "Recognizes the Rollout has Istio traffic routing configured",
-        "Reports overall status as PASS",
-        "Does NOT produce false positives — this repo is intentionally clean"
+        "Reaches and states a clear overall verdict for the repository \u2014 a PASS/WARN/FAIL label or an equivalent unambiguous statement such as 'do not apply as committed'. The specific vocabulary does not matter; giving severity-tiered findings with no overall judgement does not satisfy this.",
+        "Does NOT produce false positives \u2014 this repo is intentionally clean"
       ]
     },
     {
-      "id": 13,
+      "id": 12,
       "name": "Subtle RBAC: looks restricted but has privilege escalation",
-      "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/subtle-rbac/ using the argo-repo-audit skill. This repo has one AppProject and one Application. The AppProject looks well-configured at first glance — restricted sourceRepos, scoped destinations, explicit clusterResourceWhitelist. Look carefully.",
+      "prompt": "Audit the Argo CD GitOps repository at tests/argo-repo-audit/targeted-bugs/subtle-rbac/ using the argo-repo-audit skill. This repo has one AppProject and one Application. The AppProject looks well-configured at first glance \u2014 restricted sourceRepos, scoped destinations, explicit clusterResourceWhitelist. Look carefully.",
       "expectations": [
-        "Flags clusterResourceWhitelist allowing ClusterRole and ClusterRoleBinding as a privilege escalation risk — the data team can create ClusterRoleBindings that grant themselves (or their apps) cluster-admin",
-        "Flags the exec permission in the project role (exec, create) as a security risk — allows terminal access into running pods, which can be used to access node-level resources, service account tokens, and secrets",
-        "Does NOT flag sourceRepos or destinations — those are properly restricted",
-        "Does NOT flag the Application — it has proper syncPolicy, pinned targetRevision, and retry",
-        "Explains why ClusterRole+ClusterRoleBinding in clusterResourceWhitelist is dangerous even when destinations are scoped — the created ClusterRoleBinding applies cluster-wide, not just to the allowed namespaces",
-        "Reports overall status as FAIL or WARN due to the privilege escalation path"
+        "Flags clusterResourceWhitelist allowing ClusterRole and ClusterRoleBinding as a privilege escalation risk \u2014 the data team can create ClusterRoleBindings that grant themselves (or their apps) cluster-admin",
+        "Flags the exec permission in the project role (exec, create) as a security risk \u2014 allows terminal access into running pods, which can be used to access node-level resources, service account tokens, and secrets",
+        "Does NOT flag sourceRepos or destinations \u2014 those are properly restricted",
+        "Does NOT flag the Application \u2014 it has proper syncPolicy, pinned targetRevision, and retry",
+        "Explains why ClusterRole+ClusterRoleBinding in clusterResourceWhitelist is dangerous even when destinations are scoped \u2014 the created ClusterRoleBinding applies cluster-wide, not just to the allowed namespaces",
+        "Reaches and states a clear overall verdict for the repository \u2014 a PASS/WARN/FAIL label or an equivalent unambiguous statement such as 'do not apply as committed'. The specific vocabulary does not matter; giving severity-tiered findings with no overall judgement does not satisfy this."
       ]
     }
   ]

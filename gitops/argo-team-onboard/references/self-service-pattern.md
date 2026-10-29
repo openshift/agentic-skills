@@ -6,6 +6,18 @@ Argo CD provisions everything automatically.
 
 ## teams.yaml Schema
 
+> **Read this before copying the central form below.** A single `teams.yaml` holding a
+> `teams:` **array** is the intuitive shape and it does **not** work with a git *file*
+> generator: each matched file becomes one Application using that file's top-level keys,
+> so `{{ .team.name }}` never resolves. Under the recommended
+> `goTemplateOptions: [missingkey=error]` the ApplicationSet fails to render rather than
+> silently producing junk — which is the good outcome, but it still does not work.
+>
+> **Use one file per team** at `teams/<name>/config.yaml` with a top-level `team:` key.
+> The schema below is still the right *content*; it is the container that differs. The
+> central array form is usable only with a Kustomize/templating step that fans it out
+> into per-team files first.
+
 Central registry of onboarded teams. Lives in the GitOps repo.
 
 ```yaml
@@ -112,7 +124,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: team-projects
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 spec:
   goTemplate: true
   goTemplateOptions:
@@ -122,13 +134,14 @@ spec:
         repoURL: https://github.com/{{ORG}}/gitops-platform.git
         revision: main
         files:
-          - path: teams.yaml
+          - path: "teams/*/config.yaml"              # one file per team — NOT teams.yaml
   template:
     metadata:
-      name: 'appproject-{{ range .teams }}{{ .name }}{{ end }}'
+      name: 'appproject-{{ .team.name }}'
     spec:
-      # This ApplicationSet creates one Application per team.
-      # That Application points to a rendered AppProject manifest.
+      # One Application per matched FILE, so one per team. With a central teams.yaml
+      # array this produces exactly ONE Application whose name is every team
+      # concatenated — see the warning at the top of this file.
       project: default
       source:
         repoURL: https://github.com/{{ORG}}/gitops-platform.git
@@ -136,7 +149,7 @@ spec:
         path: 'generated/projects'                   # Pre-rendered by CI or controller
       destination:
         server: https://kubernetes.default.svc
-        namespace: argocd
+        namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 ```
 
 The above is complex. A simpler pattern uses one ApplicationSet per resource type:
@@ -149,7 +162,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: team-onboarding
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 spec:
   goTemplate: true
   goTemplateOptions:
@@ -171,7 +184,7 @@ spec:
         path: 'teams/{{ .team.name }}/manifests'     # Team's rendered manifests
       destination:
         server: https://kubernetes.default.svc
-        namespace: argocd
+        namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
       syncPolicy:
         automated:
           prune: true
@@ -238,7 +251,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: team-PLACEHOLDER
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 spec:
   description: "Team project"
   sourceRepos: []
@@ -288,7 +301,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: team-payments
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 spec:
   description: "Payments team project"
   sourceRepos:
@@ -320,7 +333,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: team-onboarding
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 spec:
   project: default
   source:
@@ -329,7 +342,7 @@ spec:
     path: onboarding                                 # Top-level kustomization
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
   syncPolicy:
     automated:
       prune: true
@@ -370,10 +383,10 @@ TEAMS_FILE="${1:-teams.yaml}"
 yq eval '.' "$TEAMS_FILE" > /dev/null || { echo "FAIL: invalid YAML"; exit 1; }
 
 # 2. Required fields
-for team in $(yq eval '.teams[].name' "$TEAMS_FILE"); do
-  repos=$(yq eval ".teams[] | select(.name == \"$team\") | .repos | length" "$TEAMS_FILE")
-  envs=$(yq eval ".teams[] | select(.name == \"$team\") | .environments | length" "$TEAMS_FILE")
-  sso=$(yq eval ".teams[] | select(.name == \"$team\") | .ssoGroup" "$TEAMS_FILE")
+for team in $(yq eval '.team   # per-file shape; was .teams[] when this assumed a central array.name' "$TEAMS_FILE"); do
+  repos=$(yq eval ".team   # per-file shape; was .teams[] when this assumed a central array | select(.name == \"$team\") | .repos | length" "$TEAMS_FILE")
+  envs=$(yq eval ".team   # per-file shape; was .teams[] when this assumed a central array | select(.name == \"$team\") | .environments | length" "$TEAMS_FILE")
+  sso=$(yq eval ".team   # per-file shape; was .teams[] when this assumed a central array | select(.name == \"$team\") | .ssoGroup" "$TEAMS_FILE")
 
   [[ "$repos" -gt 0 ]] || { echo "FAIL: $team has no repos"; exit 1; }
   [[ "$envs" -gt 0 ]] || { echo "FAIL: $team has no environments"; exit 1; }
@@ -381,12 +394,12 @@ for team in $(yq eval '.teams[].name' "$TEAMS_FILE"); do
 done
 
 # 3. Namespace uniqueness across all teams
-all_ns=$(yq eval '.teams[].namespaces[]' "$TEAMS_FILE" | sort)
+all_ns=$(yq eval '.team   # per-file shape; was .teams[] when this assumed a central array.namespaces[]' "$TEAMS_FILE" | sort)
 dupes=$(echo "$all_ns" | uniq -d)
 [[ -z "$dupes" ]] || { echo "FAIL: duplicate namespaces: $dupes"; exit 1; }
 
 # 4. No wildcard repos
-wildcards=$(yq eval '.teams[].repos[]' "$TEAMS_FILE" | grep -c '^\*$' || true)
+wildcards=$(yq eval '.team   # per-file shape; was .teams[] when this assumed a central array.repos[]' "$TEAMS_FILE" | grep -c '^\*$' || true)
 [[ "$wildcards" -eq 0 ]] || { echo "FAIL: wildcard repo detected"; exit 1; }
 
 echo "PASS: all validations passed"

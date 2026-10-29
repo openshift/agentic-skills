@@ -218,8 +218,30 @@ data:
         }]
       groupingKey: "{{.app.metadata.name}}"
       notifyBroadcast: false
-      deliveryPolicy: Post              # Post, PostAndUpdate
+      deliveryPolicy: Post              # Post, PostAndUpdate, Update
 ```
+
+#### Slack template fields
+
+| Field | Purpose |
+|-------|---------|
+| `attachments` | JSON string — legacy Slack attachments API (the coloured side bar) |
+| `blocks` | JSON string — Slack Block Kit, the current layout API |
+| `username` | Override the bot display name for this message |
+| `icon` | Override the bot icon (emoji such as `:rocket:`, or an image URL) |
+| `groupingKey` | Messages sharing a key are threaded/aggregated — commonly the app name or revision |
+| `notifyBroadcast` | When threading, also broadcast the reply to the channel |
+| `deliveryPolicy` | `Post` (new message), `PostAndUpdate` (post then edit in place), `Update` (edit only) |
+
+**`attachments` and `blocks` are two different Slack rendering APIs — choose one.** The
+example above shows both purely so you can see the shape of each; sending both in one real
+template gives Slack two renderings of the same event in a single message. Block Kit
+(`blocks`) is the current API and the right default; `attachments` is worth keeping only
+for the coloured status bar, which Block Kit has no direct equivalent for.
+
+`deliveryPolicy: PostAndUpdate` pairs well with a `groupingKey` of the revision: the
+sync-started message is edited in place as the sync succeeds or fails, instead of posting
+three separate messages per deploy.
 
 ### Email Template
 
@@ -366,7 +388,42 @@ data:
 |-------|-------------|
 | `when` | Condition expression (see below) |
 | `send` | List of template names to send |
-| `oncePer` | Dedup key expression — only trigger once per unique value of this expression |
+| `oncePer` | Dedup key expression — only notify once per unique value of this expression |
+
+#### `oncePer` is scoped per trigger, not globally
+
+Each trigger keeps its own dedup bucket. This matters when reporting **several states for
+the same commit** — for example driving a GitHub commit status pending → success/failure.
+
+A single trigger with `oncePer: app.status.sync.revision` and a conditional state fires
+**once per revision and then never again for that revision**. The first firing is normally
+`pending`, so the commit status sticks on pending forever and the gate never clears.
+
+Use one trigger per state, each with its own dedup key:
+
+```yaml
+data:
+  trigger.on-sync-running: |
+    - when: app.status.operationState.phase in ['Running']
+      oncePer: app.status.sync.revision
+      send: [github-commit-status-pending]
+
+  trigger.on-sync-succeeded: |
+    - when: app.status.operationState.phase in ['Succeeded']
+      oncePer: app.status.operationState.syncResult.revision
+      send: [github-commit-status-success]
+
+  trigger.on-sync-failed: |
+    - when: app.status.operationState.phase in ['Error', 'Failed']
+      oncePer: app.status.operationState.syncResult.revision
+      send: [github-commit-status-failure]
+```
+
+**Pick the revision field that matches the phase.**
+`app.status.operationState.syncResult.revision` is only populated once the operation
+produces a result — during `Running` it is empty, which makes it a broken dedup key for
+the pending notification. Use `app.status.sync.revision` while in flight, and
+`operationState.syncResult.revision` for terminal states.
 
 ### Trigger Condition Expressions
 

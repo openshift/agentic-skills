@@ -1,5 +1,33 @@
 # Argo Cluster Debug — Troubleshooting Reference
 
+> **Component selectors:** `$CR` is the ArgoCD instance's name — `openshift-gitops`,
+> `team-b`, etc. Operator-managed workloads are labelled `<cr-name>-<component>`, so a
+> hardcoded `app.kubernetes.io/name=argocd-server` matches **nothing** and the component
+> reads as absent. Resolve it alongside `$NS`:
+>
+> ```bash
+> CR=$(kubectl get argocd -n "$NS" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+> CR=${CR:-argocd}   # falls back to the Helm/standalone naming
+> ```
+>
+> On a Helm or plain-manifest install the components really are `argocd-*`, so the
+> fallback makes the same commands work on both.
+
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 Symptom-to-cause mappings organized by Argo component. Read this in full before starting any debugging workflow.
 
 ---
@@ -20,10 +48,10 @@ Symptom-to-cause mappings organized by Argo component. Read this in full before 
 **Debug:**
 ```bash
 # Check the condition message
-kubectl get application <name> -n argocd -o jsonpath='{.status.conditions[*].message}'
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.status.conditions[*].message}'
 
 # Check repo-server logs for manifest generation errors
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=200 | grep -i error
+kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-repo-server --tail=200 | grep -i error
 
 # For Helm: try rendering locally
 helm template <chart-path> -f <values-file>
@@ -44,13 +72,18 @@ kustomize build <path>
 **Debug:**
 ```bash
 # Check the operation state
-kubectl get application <name> -n argocd -o jsonpath='{.status.operationState.syncResult.resources[*]}' | python3 -m json.tool
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.status.operationState.syncResult.resources[*]}' | python3 -m json.tool
 
 # Check AppProject restrictions
-kubectl get appproject <project-name> -n argocd -o yaml
+kubectl get appproject <project-name> -n "$NS" -o yaml
 
 # Verify the controller can create the resource
-kubectl auth can-i create <resource> --as=system:serviceaccount:argocd:argocd-application-controller -n <target-namespace>
+# The controller SA is <cr-name>-argocd-application-controller in the INSTANCE namespace.
+# Getting this wrong is worse than useless: auth can-i answers "no" for a service account
+# that does not exist, which reads as "RBAC is broken" when nothing is broken.
+# Verified: the wrong SA returns "no", the real one returns "yes" on the same cluster.
+kubectl auth can-i create <resource> \
+  --as=system:serviceaccount:"$NS":"$CR"-argocd-application-controller -n <target-namespace>
 ```
 
 ### OutOfSync but auto-sync not triggering
@@ -67,16 +100,16 @@ kubectl auth can-i create <resource> --as=system:serviceaccount:argocd:argocd-ap
 **Debug:**
 ```bash
 # Check syncPolicy
-kubectl get application <name> -n argocd -o jsonpath='{.spec.syncPolicy}'
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.spec.syncPolicy}'
 
 # Check for sync error backoff
-kubectl get application <name> -n argocd -o jsonpath='{.status.operationState.retryCount}'
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.status.operationState.retryCount}'
 
 # Check sync windows on the AppProject
-kubectl get appproject <project> -n argocd -o jsonpath='{.spec.syncWindows}'
+kubectl get appproject <project> -n "$NS" -o jsonpath='{.spec.syncWindows}'
 
 # Check application-controller logs for sync decisions
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=200 | grep <app-name>
+kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-application-controller --tail=200 | grep <app-name>
 ```
 
 ### Sync stuck in Progressing
@@ -93,7 +126,7 @@ kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller -
 **Debug:**
 ```bash
 # Check which resources are not synced/healthy
-kubectl get application <name> -n argocd -o jsonpath='{range .status.resources[*]}{.kind}/{.name}: sync={.status}, health={.health.status}{"\n"}{end}' | grep -v 'Synced.*Healthy'
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{range .status.resources[*]}{.kind}/{.name}: sync={.status}, health={.health.status}{"\n"}{end}' | grep -v 'Synced.*Healthy'
 
 # Check for stuck deletions (finalizers)
 kubectl get <kind> <name> -n <namespace> -o jsonpath='{.metadata.finalizers}'
@@ -115,19 +148,19 @@ kubectl get events -n <namespace> --field-selector reason=FailedCreate
 **Debug:**
 ```bash
 # Check repo-server health
-kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-repo-server
+kubectl get pods -n "$NS" -l app.kubernetes.io/name=$CR-repo-server
 
 # Check repo-server resource usage
-kubectl top pods -n argocd -l app.kubernetes.io/name=argocd-repo-server
+kubectl top pods -n "$NS" -l app.kubernetes.io/name=$CR-repo-server
 
 # Check repo connectivity (repo-server no longer ships git binary since v2.5+)
 # Option 1: Use argocd CLI if available
 argocd repo list
 # Option 2: Check repo-server logs for fetch errors
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=200 | grep -i -E 'repo|fetch|clone|error'
+kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-repo-server --tail=200 | grep -i -E 'repo|fetch|clone|error'
 
 # Check timeout config
-kubectl get configmap argocd-cm -n argocd -o jsonpath='{.data.reposerver\.timeout\.seconds}'
+kubectl get configmap argocd-cm -n "$NS" -o jsonpath='{.data.reposerver\.timeout\.seconds}'
 ```
 
 ### Helm rendering failures
@@ -144,7 +177,7 @@ kubectl get configmap argocd-cm -n argocd -o jsonpath='{.data.reposerver\.timeou
 **Debug:**
 ```bash
 # Check the source config
-kubectl get application <name> -n argocd -o jsonpath='{.spec.source.helm}' | python3 -m json.tool
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.spec.source.helm}' | python3 -m json.tool
 
 # Try rendering locally with the same values
 helm template <release-name> <chart> -f <values.yaml> --version <version>
@@ -164,7 +197,7 @@ helm template <release-name> <chart> -f <values.yaml> --version <version>
 **Debug:**
 ```bash
 # Check Kustomize version Argo CD is using
-kubectl get configmap argocd-cm -n argocd -o jsonpath='{.data.kustomize\.buildOptions}'
+kubectl get configmap argocd-cm -n "$NS" -o jsonpath='{.data.kustomize\.buildOptions}'
 
 # Try building locally
 kustomize build <path>
@@ -193,7 +226,7 @@ kustomize build <path>
 **Debug:**
 ```bash
 # Find the degraded resource
-kubectl get application <name> -n argocd -o jsonpath='{range .status.resources[?(@.health.status=="Degraded")]}{.kind}/{.namespace}/{.name}{"\n"}{end}'
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{range .status.resources[?(@.health.status=="Degraded")]}{.kind}/{.namespace}/{.name}{"\n"}{end}'
 
 # Get events for the degraded resource
 kubectl describe <kind> <name> -n <namespace>
@@ -237,7 +270,10 @@ kubectl get <kind> <name> -n <namespace>
 kubectl get crd <crd-name>
 
 # Check RBAC
-kubectl auth can-i get <resource> --as=system:serviceaccount:argocd:argocd-application-controller -n <namespace>
+kubectl auth can-i get <resource> \
+  --as=system:serviceaccount:"$NS":"$CR"-argocd-application-controller -n <namespace>
+# (a nonexistent SA answers "no" — confirm the SA exists before believing a denial:
+#  kubectl get sa -n "$NS" | grep application-controller)
 ```
 
 ### Unknown
@@ -252,10 +288,10 @@ kubectl auth can-i get <resource> --as=system:serviceaccount:argocd:argocd-appli
 **Debug:**
 ```bash
 # Check for custom health checks in argocd-cm
-kubectl get configmap argocd-cm -n argocd -o yaml | grep -A20 'resource.customizations.health'
+kubectl get configmap argocd-cm -n "$NS" -o yaml | grep -A20 'resource.customizations.health'
 
 # Check in argocd-cm data for the specific Kind
-kubectl get configmap argocd-cm -n argocd -o jsonpath='{.data}' | python3 -c "
+kubectl get configmap argocd-cm -n "$NS" -o jsonpath='{.data}' | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for k,v in data.items():
@@ -275,7 +311,7 @@ for k,v in data.items():
 
 ### No Applications generated
 
-**Symptoms:** ApplicationSet exists but `kubectl get applications -n argocd` shows none owned by it.
+**Symptoms:** ApplicationSet exists but `kubectl get applications.argoproj.io -n "$NS"` shows none owned by it.
 
 **Causes:**
 - Generator returns an empty parameter set
@@ -288,15 +324,15 @@ for k,v in data.items():
 **Debug:**
 ```bash
 # Check applicationset-controller logs
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-applicationset-controller --tail=200
+kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-applicationset-controller --tail=200
 
 # Check ApplicationSet status
-kubectl get applicationset <name> -n argocd -o jsonpath='{.status}' | python3 -m json.tool
+kubectl get applicationset <name> -n "$NS" -o jsonpath='{.status}' | python3 -m json.tool
 
 # For cluster generator: list known clusters
 argocd cluster list
 # or
-kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=cluster
+kubectl get secrets -n "$NS" -l argocd.argoproj.io/secret-type=cluster
 ```
 
 ### Duplicate Applications
@@ -311,7 +347,7 @@ kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=cluster
 **Debug:**
 ```bash
 # List applications and their owning ApplicationSet
-kubectl get applications -n argocd -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.ownerReferences[0].name}{"\n"}{end}'
+kubectl get applications.argoproj.io -n "$NS" -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.ownerReferences[0].name}{"\n"}{end}'
 ```
 
 ### Applications not updating after generator source changes
@@ -326,10 +362,10 @@ kubectl get applications -n argocd -o jsonpath='{range .items[*]}{.metadata.name
 **Debug:**
 ```bash
 # Check requeueAfterSeconds
-kubectl get applicationset <name> -n argocd -o jsonpath='{.spec.generators[*].scmProvider.requeueAfterSeconds}'
+kubectl get applicationset <name> -n "$NS" -o jsonpath='{.spec.generators[*].scmProvider.requeueAfterSeconds}'
 
 # Force reconciliation by touching the ApplicationSet
-kubectl annotate applicationset <name> -n argocd refreshed-at="$(date +%s)" --overwrite
+kubectl annotate applicationset <name> -n "$NS" refreshed-at="$(date +%s)" --overwrite
 ```
 
 ### Progressive sync stuck
@@ -344,10 +380,10 @@ kubectl annotate applicationset <name> -n argocd refreshed-at="$(date +%s)" --ov
 **Debug:**
 ```bash
 # Check strategy configuration
-kubectl get applicationset <name> -n argocd -o jsonpath='{.spec.strategy}' | python3 -m json.tool
+kubectl get applicationset <name> -n "$NS" -o jsonpath='{.spec.strategy}' | python3 -m json.tool
 
 # Check Application health per step
-kubectl get applications -n argocd -l 'app.kubernetes.io/managed-by=applicationset-controller' -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
+kubectl get applications.argoproj.io -n "$NS" -l 'app.kubernetes.io/managed-by=applicationset-controller' -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
 ```
 
 ---
@@ -464,285 +500,7 @@ kubectl get replicaset -n <namespace> -l app=<app-label> -o custom-columns='NAME
 
 ---
 
-## Workflow Issues
 
-### Workflow Pending
-
-**Symptoms:** Workflow phase is `Pending`. No pods are created.
-
-**Causes:**
-- No workflow-controller running in the cluster
-- ResourceQuota exceeded in the namespace
-- PodSecurityPolicy/PodSecurityAdmission blocking pod creation
-- ServiceAccount doesn't exist
-- PriorityClass not found
-- Node affinity/tolerations preventing scheduling
-- `synchronization` semaphore or mutex is held by another Workflow
-
-**Debug:**
-```bash
-# Check workflow controller
-kubectl get pods --all-namespaces -l app=workflow-controller
-
-# Check resource quotas
-kubectl get resourcequota -n <namespace>
-kubectl describe resourcequota -n <namespace>
-
-# Check ServiceAccount
-kubectl get sa <sa-name> -n <namespace>
-
-# Check synchronization (use the specific sub-field, the parent returns empty)
-kubectl get workflow <name> -n <namespace> -o jsonpath='{.status.synchronization.semaphore}'
-kubectl get workflow <name> -n <namespace> -o jsonpath='{.status.synchronization.mutex}'
-```
-
-### Workflow Failed — OOMKilled
-
-**Symptoms:** Workflow node shows `Failed` with `OOMKilled` reason.
-
-**Causes:**
-- Container `resources.limits.memory` too low for the workload
-- Memory leak in the user's script/binary
-- Large file processing in memory
-
-**Debug:**
-```bash
-# Get the failed pod's termination status
-kubectl get pod <pod-name> -n <namespace> -o jsonpath='{.status.containerStatuses[*].lastState.terminated}'
-
-# Check the resource limits in the template
-kubectl get workflow <name> -n <namespace> -o jsonpath='{.spec.templates[*].container.resources}'
-```
-
-**Fix:** Increase `resources.limits.memory` in the Workflow template. Or add `resources` to the specific step that failed.
-
-### Workflow Failed — deadline exceeded
-
-**Symptoms:** Workflow message contains "exceeded its deadline" or "activeDeadlineSeconds".
-
-**Causes:**
-- `activeDeadlineSeconds` set on the Workflow or template and exceeded
-- Long-running step blocked on I/O or external dependency
-- Retry loop consuming time budget
-
-**Debug:**
-```bash
-# Check deadline
-kubectl get workflow <name> -n <namespace> -o jsonpath='{.spec.activeDeadlineSeconds}'
-
-# Check which node was running when deadline hit
-kubectl get workflow <name> -n <namespace> -o jsonpath='{range .status.nodes[*]}{.displayName}: {.phase} started={.startedAt} finished={.finishedAt}{"\n"}{end}'
-```
-
-### Workflow Failed — artifact error
-
-**Symptoms:** `wait` container logs show S3/GCS/Artifactory connectivity or permission errors.
-
-**Causes:**
-- Artifact repository not configured — check `default-artifact-repository` in workflow-controller ConfigMap
-- S3 bucket credentials expired or wrong
-- S3 endpoint URL incorrect (especially for MinIO)
-- Artifact key collision (two steps writing to the same path)
-- GCS service account JSON key invalid
-
-**Debug:**
-```bash
-# Check artifact repository config
-kubectl get configmap workflow-controller-configmap -n argo -o yaml | grep -A20 artifactRepository
-
-# Check wait container logs for the failed pod
-kubectl logs <pod-name> -n <namespace> -c wait --tail=100
-
-# Check the Secret referenced for artifact credentials
-kubectl get secret <artifact-secret> -n argo -o yaml
-```
-
-### DAG steps stuck — dependency cycle
-
-**Symptoms:** Workflow is `Running` but no progress. Nodes are in `Pending` phase indefinitely.
-
-**Causes:**
-- Circular dependency in DAG `dependencies` field (A -> B -> C -> A)
-- Dependency references a task name that doesn't exist (typo)
-- `when` condition on a task depends on a task that is itself waiting
-
-**Debug:**
-```bash
-# Get the DAG definition
-kubectl get workflow <name> -n <namespace> -o jsonpath='{.spec.templates[?(@.dag)].dag.tasks}' | python3 -m json.tool
-
-# Check node states
-kubectl get workflow <name> -n <namespace> -o jsonpath='{range .status.nodes[*]}{.displayName}: {.phase} type={.type}{"\n"}{end}'
-```
-
-### CronWorkflow not firing
-
-**Symptoms:** CronWorkflow exists but no new Workflows are created at the expected schedule.
-
-**Causes:**
-- `spec.timezone` is wrong or missing (defaults to controller's timezone, usually UTC)
-- `spec.concurrencyPolicy: Forbid` and a previous Workflow is still running
-- `spec.startingDeadlineSeconds` is too short — the controller missed the window
-- `spec.suspend: true` — CronWorkflow is explicitly suspended
-- Workflow controller is not running or not watching the namespace
-
-**Debug:**
-```bash
-# Check CronWorkflow config
-kubectl get cronworkflow <name> -n <namespace> -o yaml
-
-# Check last scheduled time
-kubectl get cronworkflow <name> -n <namespace> -o jsonpath='last={.status.lastScheduledTime}, active={.status.active}'
-
-# Check for active workflows from this CronWorkflow
-kubectl get workflows -n <namespace> -l workflows.argoproj.io/cron-workflow=<name>
-
-# Check controller logs
-kubectl logs -n argo -l app=workflow-controller --tail=100 | grep <name>
-```
-
----
-
-## Events Issues
-
-### EventSource not receiving events
-
-**Symptoms:** EventSource status is `Ready` but no events flow to the Sensor. Sensor logs show no incoming events.
-
-**Causes (by EventSource type):**
-
-| Type | Common Cause |
-|------|-------------|
-| webhook | URL not reachable — firewall, no Ingress/Service, wrong port |
-| github/gitlab | Webhook secret mismatch, webhook not configured on the repo |
-| sns/sqs | IAM permissions, wrong region, queue/topic ARN incorrect |
-| kafka | Broker unreachable, topic doesn't exist, consumer group conflict |
-| resource | RBAC — EventSource ServiceAccount can't watch the resource |
-| calendar | Timezone issue, cron expression syntax |
-| file | Volume mount missing, file path doesn't exist in the pod |
-
-**Debug:**
-```bash
-# Check EventSource pods
-kubectl get pods -n <namespace> -l eventsource-name=<name>
-kubectl logs -n <namespace> -l eventsource-name=<name> --tail=200
-
-# For webhook: check Service and Ingress
-kubectl get svc -n <namespace> | grep <eventsource-name>
-kubectl get ingress -n <namespace> | grep <eventsource-name>
-
-# For webhook: test connectivity from inside the cluster
-kubectl run curl-test --rm -i --restart=Never --image=curlimages/curl -- curl -v http://<service>.<namespace>.svc:<port>/<endpoint>
-```
-
-### EventBus pods crashing
-
-**Symptoms:** EventBus pods in CrashLoopBackOff or restarting frequently. Events not flowing.
-
-**Causes:**
-- NATS cluster can't form quorum — pod anti-affinity with insufficient nodes
-- Disk pressure — NATS JetStream storage full
-- TLS certificate issues between NATS nodes
-- Resource limits too low for the event volume
-- PersistentVolume issues for JetStream storage
-
-**Debug:**
-```bash
-# Check EventBus pods
-kubectl get pods -n <namespace> -l controller=eventbus
-kubectl describe pods -n <namespace> -l controller=eventbus
-
-# Check NATS logs
-kubectl logs -n <namespace> <eventbus-pod> --tail=200
-
-# Check PVCs for JetStream
-kubectl get pvc -n <namespace> -l controller=eventbus
-
-# Check EventBus status
-kubectl get eventbus -n <namespace> -o yaml
-```
-
-### Sensor not triggering
-
-**Symptoms:** Events are reaching the EventBus (EventSource logs confirm publishing), but the Sensor does not fire triggers.
-
-**Causes:**
-- `spec.dependencies[].eventSourceName` or `spec.dependencies[].eventName` doesn't match the EventSource event key
-- `spec.dependencies[].filters` are excluding all events:
-  - `filters.data` — JSONPath filter doesn't match the event payload
-  - `filters.context` — CloudEvents context attributes don't match
-  - `filters.time` — time window filter excluding current time
-  - `filters.exprFilters` — CEL/expression evaluating to false
-- Dependency expression (`spec.dependencies[].filtersLogicalOperator`) using `and` when `or` is needed
-- EventBus subscription issue — Sensor pod restarted and lost its subscription position
-
-**Debug:**
-```bash
-# Check Sensor status
-kubectl get sensor <name> -n <namespace> -o yaml
-
-# Check Sensor pod logs — look for "event received" and "trigger executed" messages
-kubectl logs -n <namespace> -l sensor-name=<name> --tail=200
-
-# Verify dependency names match EventSource event keys
-kubectl get eventsource <es-name> -n <namespace> -o jsonpath='{.spec}' | python3 -c "
-import sys, json
-spec = json.load(sys.stdin)
-for event_type, events in spec.items():
-    if isinstance(events, dict):
-        for name in events:
-            print(f'{event_type}/{name}')
-"
-```
-
-### Trigger failing — target resource not created
-
-**Symptoms:** Sensor logs show "event received" and "executing trigger" but the target resource (e.g., Workflow) is not created.
-
-**Causes:**
-- RBAC: Sensor ServiceAccount doesn't have permission to create the target resource
-- Trigger template has invalid YAML (rendering error with parameter substitution)
-- `spec.triggers[].template.k8s.operation` is wrong (e.g., `update` for a resource that doesn't exist yet)
-- `spec.triggers[].template.k8s.source.resource` has an invalid manifest
-- Parameter dependency references a non-existent path in the event payload
-
-**Debug:**
-```bash
-# Check Sensor ServiceAccount RBAC
-SA=$(kubectl get sensor <name> -n <namespace> -o jsonpath='{.spec.template.serviceAccountName}')
-echo "ServiceAccount: $SA"
-kubectl auth can-i create workflows --as=system:serviceaccount:<namespace>:$SA -n <namespace>
-kubectl auth can-i create pods --as=system:serviceaccount:<namespace>:$SA -n <namespace>
-
-# Check Sensor logs for trigger errors
-kubectl logs -n <namespace> -l sensor-name=<name> --tail=200 | grep -i -E 'error|fail|trigger'
-
-# Check the trigger template
-kubectl get sensor <name> -n <namespace> -o jsonpath='{.spec.triggers[0].template}' | python3 -m json.tool
-```
-
-### Full pipeline debug: EventSource -> EventBus -> Sensor -> Trigger
-
-When the break point is unclear, trace the full pipeline:
-
-```bash
-# 1. EventBus health
-kubectl get eventbus -n <namespace>
-kubectl get pods -n <namespace> -l controller=eventbus
-
-# 2. EventSource health and event publishing
-kubectl get eventsource -n <namespace>
-kubectl logs -n <namespace> -l eventsource-name=<name> --tail=50 | grep -i publish
-
-# 3. Sensor health and event receipt
-kubectl get sensor -n <namespace>
-kubectl logs -n <namespace> -l sensor-name=<name> --tail=50 | grep -i -E 'event|trigger'
-
-# 4. Target resource creation
-kubectl get <target-kind> -n <namespace> --sort-by='.metadata.creationTimestamp' | tail -5
-```
-
----
 
 ## Common kubectl Commands
 
@@ -752,19 +510,19 @@ Quick reference for the most-used debug commands across all Argo components.
 
 | Command | Purpose |
 |---------|---------|
-| `kubectl get applications -n argocd` | List all Applications |
-| `kubectl get applications -n argocd -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'` | Application status summary |
-| `kubectl get applicationsets -n argocd` | List all ApplicationSets |
-| `kubectl get appprojects -n argocd` | List all AppProjects |
-| `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=100` | Controller logs |
-| `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=100` | Repo server logs |
-| `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=100` | API server logs |
-| `kubectl get configmap argocd-cm -n argocd -o yaml` | Server configuration |
-| `kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=repository` | Configured repositories |
-| `kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=cluster` | Configured clusters |
+| `kubectl get applications.argoproj.io -n "$NS"` | List all Applications |
+| `kubectl get applications.argoproj.io -n "$NS" -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'` | Application status summary |
+| `kubectl get applicationsets -n "$NS"` | List all ApplicationSets |
+| `kubectl get appprojects -n "$NS"` | List all AppProjects |
+| `kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-application-controller --tail=100` | Controller logs |
+| `kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-repo-server --tail=100` | Repo server logs |
+| `kubectl logs -n "$NS" -l app.kubernetes.io/name=$CR-server --tail=100` | API server logs |
+| `kubectl get configmap argocd-cm -n "$NS" -o yaml` | Server configuration |
+| `kubectl get secrets -n "$NS" -l argocd.argoproj.io/secret-type=repository` | Configured repositories |
+| `kubectl get secrets -n "$NS" -l argocd.argoproj.io/secret-type=cluster` | Configured clusters |
 | `argocd app list` | List apps (CLI) |
 | `argocd app get <name>` | App detail (CLI) |
-| `argocd app diff <name>` | Show diff (CLI) |
+| `argocd app diff <name>` | Show diff (CLI). **Often unusable on OpenShift GitOps**: in `--core` mode it looks for `app.kubernetes.io/name=argocd-redis`, which the operator names `<cr-name>-redis`; `--redis-name "$CR"-redis` gets one step further and then fails `NOAUTH Authentication required`. It also exits 0 despite printing `FATAL`, so check output not exit code. Fall back to `kubectl get application <name> -o jsonpath='{.status.resources}'` |
 | `argocd app history <name>` | Sync history (CLI) |
 
 ### Argo Rollouts
@@ -779,37 +537,9 @@ Quick reference for the most-used debug commands across all Argo components.
 | `kubectl argo rollouts status <name> -n <ns>` | Rollout status (plugin CLI) |
 | `kubectl argo rollouts list rollouts -n <ns>` | List rollouts (plugin CLI) |
 | `kubectl get replicaset -n <ns> -l app=<label> -o wide` | ReplicaSets for a Rollout |
-| `kubectl logs -n argo-rollouts -l app.kubernetes.io/name=argo-rollouts` | Rollouts controller logs |
+| `kubectl logs -n "$NS" -l app.kubernetes.io/name=argo-rollouts` | Rollouts controller logs. **On OpenShift GitOps the controller runs in the Argo CD instance namespace, not `argo-rollouts`** — it is reconciled from a `RolloutManager` CR. Find it with `kubectl get deploy -A \| grep argo-rollouts` |
 
-### Argo Workflows
 
-| Command | Purpose |
-|---------|---------|
-| `kubectl get workflows -n <ns>` | List Workflows |
-| `kubectl get workflowtemplates -n <ns>` | List WorkflowTemplates |
-| `kubectl get clusterworkflowtemplates` | List ClusterWorkflowTemplates |
-| `kubectl get cronworkflows -n <ns>` | List CronWorkflows |
-| `argo list -n <ns>` | List workflows (CLI) |
-| `argo get <name> -n <ns>` | Workflow detail (CLI) |
-| `argo logs <name> -n <ns>` | Workflow logs (CLI) |
-| `argo logs <name> -n <ns> --node-id <id>` | Node-specific logs (CLI) |
-| `kubectl logs -n argo -l app=workflow-controller --tail=100` | Controller logs |
-| `kubectl get configmap workflow-controller-configmap -n argo -o yaml` | Controller config |
-
-### Argo Events
-
-| Command | Purpose |
-|---------|---------|
-| `kubectl get eventsources -n <ns>` | List EventSources |
-| `kubectl get sensors -n <ns>` | List Sensors |
-| `kubectl get eventbus -n <ns>` | List EventBus |
-| `kubectl logs -n <ns> -l eventsource-name=<name> --tail=100` | EventSource logs |
-| `kubectl logs -n <ns> -l sensor-name=<name> --tail=100` | Sensor logs |
-| `kubectl get pods -n <ns> -l controller=eventbus` | EventBus pods |
-| `kubectl logs -n <ns> -l controller=eventsource-controller --tail=100` | EventSource controller logs |
-| `kubectl logs -n <ns> -l controller=sensor-controller --tail=100` | Sensor controller logs |
-
----
 
 ## Version-Specific Notes
 
@@ -827,16 +557,4 @@ Quick reference for the most-used debug commands across all Argo components.
 - `spec.strategy.canary.dynamicStableScale` for optimized replica management
 - `spec.analysis.measurementRetention` for keeping measurement history
 
-### Argo Workflows v3.6+
-- Artifact GC — `spec.artifactGC.strategy` controls cleanup
-- `spec.hooks` for lifecycle hooks (exit, on-error)
-- HTTP template for API calls without pods
-- Plugin templates for custom executors
-- `spec.synchronization.mutex` and `spec.synchronization.semaphore` for concurrency control
 
-### Argo Events v1.10+
-- JetStream as default EventBus (replacing NATS Streaming)
-- `spec.eventBusName` to reference specific EventBus instances
-- Rate limiting on Sensors
-- Event dependency filtering with CEL expressions
-- `spec.triggers[].atLeastOnce` for delivery guarantees

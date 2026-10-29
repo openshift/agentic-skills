@@ -70,27 +70,38 @@ fi
 # -----------------------------------------------------------------------
 # Check prerequisites
 # -----------------------------------------------------------------------
-check_prereqs() {
-  local missing=()
+# Each tool gates exactly one pass, so degrade per-tool rather than refusing to run.
+# Previously any one missing tool hard-exited, which meant a machine with yq but no
+# kubeconform got no YAML syntax check either — and a "validate only" request had no
+# automated path at all.
+HAVE_YQ=0
+HAVE_KUSTOMIZE=0
+HAVE_KUBECONFORM=0
 
-  if ! command -v yq >/dev/null 2>&1; then
-    missing+=("yq (>= 4.50)")
-  fi
-  if ! command -v kustomize >/dev/null 2>&1; then
-    missing+=("kustomize (>= 5.8)")
-  fi
-  if ! command -v kubeconform >/dev/null 2>&1; then
-    missing+=("kubeconform (>= 0.7)")
-  fi
+check_prereqs() {
+  command -v yq          >/dev/null 2>&1 && HAVE_YQ=1
+  command -v kustomize   >/dev/null 2>&1 && HAVE_KUSTOMIZE=1
+  command -v kubeconform >/dev/null 2>&1 && HAVE_KUBECONFORM=1
+
+  local missing=()
+  [[ $HAVE_YQ          -eq 0 ]] && missing+=("yq (>= 4.50)          — skips: YAML syntax check")
+  [[ $HAVE_KUBECONFORM -eq 0 ]] && missing+=("kubeconform (>= 0.7)  — skips: schema validation")
+  [[ $HAVE_KUSTOMIZE   -eq 0 ]] && missing+=("kustomize (>= 5.8)    — skips: overlay builds")
 
   if [[ ${#missing[@]} -gt 0 ]]; then
-    echo "Error: Missing required tools:" >&2
+    echo "Note: some tools are missing; running a reduced validation." >&2
     for tool in "${missing[@]}"; do
       echo "  - $tool" >&2
     done
+    echo "  Install all via: brew bundle --file=Brewfile" >&2
     echo "" >&2
+  fi
+
+  # Only a total absence of tooling is fatal — there is nothing left to do.
+  if [[ $HAVE_YQ -eq 0 && $HAVE_KUSTOMIZE -eq 0 && $HAVE_KUBECONFORM -eq 0 ]]; then
+    echo "Error: none of yq, kustomize, or kubeconform are installed — nothing to validate." >&2
     echo "Install via: brew bundle --file=Brewfile" >&2
-    exit 1
+    exit 2
   fi
 }
 
@@ -204,6 +215,11 @@ find_kustomize_dirs() {
 # -----------------------------------------------------------------------
 pass_yaml_syntax() {
   echo "=== Pass 1: YAML Syntax Validation ==="
+  if [[ $HAVE_YQ -eq 0 ]]; then
+    echo "  SKIPPED — yq not installed"
+    echo ""
+    return 0
+  fi
   local count=0
   local errors=0
 
@@ -232,6 +248,11 @@ pass_yaml_syntax() {
 # -----------------------------------------------------------------------
 pass_k8s_schema() {
   echo "=== Pass 2: Kubernetes Schema Validation ==="
+  if [[ $HAVE_KUBECONFORM -eq 0 ]]; then
+    echo "  SKIPPED — kubeconform not installed"
+    echo ""
+    return 0
+  fi
 
   local schema_args=("-skip=Secret" "-strict" "-ignore-missing-schemas" "-schema-location" "default" "-verbose")
 
@@ -304,6 +325,19 @@ pass_k8s_schema() {
 # -----------------------------------------------------------------------
 pass_kustomize_builds() {
   echo "=== Pass 3: Kustomize Overlay Builds ==="
+  if [[ $HAVE_KUSTOMIZE -eq 0 ]]; then
+    echo "  SKIPPED — kustomize not installed"
+    echo ""
+    return 0
+  fi
+  # Pass 3 builds with kustomize and then schema-checks with kubeconform. Without
+  # kubeconform the build still succeeds, so an unqualified "OK" would overstate what
+  # was actually verified — say build-only instead.
+  local BUILD_ONLY=0
+  if [[ $HAVE_KUBECONFORM -eq 0 ]]; then
+    BUILD_ONLY=1
+    echo "  NOTE: kubeconform missing — overlays will be BUILT but not schema-validated"
+  fi
 
   local schema_args=("-skip=Secret" "-strict" "-ignore-missing-schemas" "-schema-location" "default" "-verbose")
   if [[ -d "$ASSETS_SCHEMAS_DIR" ]] && ls "$ASSETS_SCHEMAS_DIR"/*.json >/dev/null 2>&1; then
@@ -365,6 +399,18 @@ pass_kustomize_builds
 echo "=== Summary ==="
 echo "  Errors:   $ERROR_COUNT"
 echo "  Warnings: $WARN_COUNT"
+
+SKIPPED=()
+[[ $HAVE_YQ          -eq 0 ]] && SKIPPED+=("YAML syntax")
+[[ $HAVE_KUBECONFORM -eq 0 ]] && SKIPPED+=("schema validation")
+[[ $HAVE_KUSTOMIZE   -eq 0 ]] && SKIPPED+=("overlay builds")
+if [[ ${#SKIPPED[@]} -gt 0 ]]; then
+  joined="$(printf '%s, ' "${SKIPPED[@]}")"
+  echo "  Skipped:  ${joined%, } (missing tooling — this was NOT a full validation)"
+fi
+# kubeconform is invoked with -skip=Secret, so this script never inspects Secret
+# contents. Plain-text secrets are a Phase 4 security-review finding, not a Pass 2 one.
+echo "  Note:     Secrets are skipped by schema validation — run the Phase 4 security review for those"
 
 if [[ $ERROR_COUNT -gt 0 ]]; then
   echo ""

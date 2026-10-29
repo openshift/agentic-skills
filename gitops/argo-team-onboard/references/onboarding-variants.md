@@ -26,12 +26,18 @@ spec:
 
 ### Helm: OCI Registry
 
-Delta: change `repoURL` prefix to `oci://`.
+Delta: point `repoURL` at the registry host + path, and register the repository with
+`enableOCI: "true"`.
+
+**Do not add an `oci://` prefix to `repoURL`** — the Argo CD docs state *"note: the
+`oci://` syntax is not included."* The scheme is implied by the repository Secret's
+`enableOCI` flag; including it fails the chart pull in a way that reads like an auth
+error.
 
 ```yaml
 spec:
   source:
-    repoURL: oci://registry.example.com/charts       # OCI prefix
+    repoURL: registry.example.com/charts             # registry host + path, no oci://
     chart: "{{CHART_NAME}}"
     targetRevision: "1.2.3"
     helm:
@@ -317,15 +323,21 @@ Delta: add `syncWindows` to the AppProject spec.
 
 **Business hours only (production):**
 
+> **Sync-window selectors are OR-ed, not AND-ed.** Argo CD: *"If more than one option is
+> specified, by default, the enabled options will be OR-ed."* So
+> `applications: ['*']` alongside `namespaces: [...]` matches **every Application on the
+> instance**, not the intersection — a deny window meant to freeze one tenant freezes
+> everyone. Use exactly one selector unless you genuinely want the union.
+
 ```yaml
 spec:
   syncWindows:
     - kind: allow
-      schedule: '0 8 * * 1-5'                       # Mon-Fri 8am UTC
+      schedule: '0 8 * * 1-5'
+      timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off                       # Mon-Fri 8am UTC
       duration: 10h                                  # Until 6pm UTC
-      applications: ['*']
       namespaces: ['{{TEAM_NAME}}-prod']
-      manualSync: true                               # Also block manual syncs outside window
+      manualSync: true                               # ESCAPE HATCH: lets a human sync outside the window
 ```
 
 **Deny weekends:**
@@ -334,11 +346,11 @@ spec:
 spec:
   syncWindows:
     - kind: deny
-      schedule: '0 18 * * 5'                         # Friday 6pm UTC
+      schedule: '0 18 * * 5'
+      timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off                         # Friday 6pm UTC
       duration: 62h                                  # Until Monday 8am UTC
-      applications: ['*']
       namespaces: ['{{TEAM_NAME}}-prod']
-      manualSync: false                              # Allow emergency manual syncs
+      manualSync: false                              # (default) emergency manual syncs are ALSO blocked
 ```
 
 **Combined (business hours + deny weekends):**
@@ -348,14 +360,14 @@ spec:
   syncWindows:
     - kind: allow
       schedule: '0 8 * * 1-5'
+      timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off
       duration: 10h
-      applications: ['*']
       namespaces: ['{{TEAM_NAME}}-prod']
       manualSync: true
     - kind: deny
       schedule: '0 18 * * 5'
+      timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off
       duration: 62h
-      applications: ['*']
       namespaces: ['{{TEAM_NAME}}-prod']
       manualSync: false
 ```
@@ -366,9 +378,9 @@ spec:
 spec:
   syncWindows:
     - kind: allow
-      schedule: '0 2 * * 3'                          # Wednesday 2am UTC
+      schedule: '0 2 * * 3'
+      timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off                          # Wednesday 2am UTC
       duration: 4h                                   # Until 6am UTC
-      applications: ['*']
       namespaces: ['{{TEAM_NAME}}-prod']
       manualSync: true
 ```
@@ -406,6 +418,22 @@ spec:
     path: deploy
 ```
 
+**GitRepository** (required — `PromotionStrategy` references it, it is not inline):
+
+```yaml
+apiVersion: promoter.argoproj.io/v1alpha1
+kind: GitRepository
+metadata:
+  name: "{{APP_NAME}}-repo"
+  namespace: "{{ARGOCD_NAMESPACE}}"
+spec:
+  github:
+    owner: "{{ORG}}"
+    name: "{{REPO}}"
+  scmProviderRef:
+    name: github
+```
+
 **PromotionStrategy:**
 
 ```yaml
@@ -413,39 +441,53 @@ apiVersion: promoter.argoproj.io/v1alpha1
 kind: PromotionStrategy
 metadata:
   name: "{{APP_NAME}}"
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"
 spec:
-  repositoryReference:
-    owner: "{{ORG}}"
-    name: "{{REPO}}"
-    scmProviderRef:
-      name: github                                   # References SCMProvider CR
+  # REQUIRED. Not `repositoryReference` — that field does not exist on the
+  # installed CRD; `spec.required` is ['environments', 'gitRepositoryRef'].
+  gitRepositoryRef:
+    name: "{{APP_NAME}}-repo"
   environments:
     - branch: environments/dev
-      autoMerge: true                                # Auto-merge PRs to dev
+      autoMerge: true
     - branch: environments/staging
-      autoMerge: true                                # Auto-merge PRs to staging
+      autoMerge: true
     - branch: environments/prod
-      autoMerge: false                               # Require manual merge to prod
+      autoMerge: false                               # manual merge to prod
   activeCommitStatuses:
-    - key: health-check
-      # Waits for commit status from Argo CD before promoting
+    - key: health-check                              # matched against CommitStatus.spec.name
 ```
 
-**SCMProvider (one per Git provider):**
+**ScmProvider (one per Git provider):**
 
 ```yaml
 apiVersion: promoter.argoproj.io/v1alpha1
-kind: SCMProvider
+kind: ScmProvider          # NOT "SCMProvider" — that kind does not exist
 metadata:
   name: github
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"
 spec:
   github:
-    domain: github.com
+    appID: 123456           # REQUIRED — the provider expects a GitHub App
+    installationID: 7890123
+    # domain: github.mycompany.com   # GitHub Enterprise ONLY.
+    # The CRD rejects `domain: github.com` outright — a CEL rule enforces
+    # "Instead of setting the domain to github.com, leave the field blank".
   secretRef:
-    name: github-token                               # Secret with PAT or GitHub App creds
+    name: github-app-creds  # Secret holding the App private key
 ```
+
+> **This section was wrong until it was checked against a running promoter.** Every CR
+> here previously failed admission: the kind was `SCMProvider`, the strategy used a
+> `repositoryReference` field that does not exist, the `GitRepository` CR was missing
+> entirely, and `spec.github` was documented with a bare PAT `secretRef` when `appID` is
+> required. Verify against your installed version before trusting any of it —
+> gitops-promoter is pre-1.0 and its API has moved:
+>
+> ```bash
+> kubectl explain promotionstrategy.spec
+> kubectl explain scmprovider.spec.github
+> ```
 
 ### Minimal (AppProject + Application Only)
 
@@ -458,7 +500,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: team-{{TEAM_NAME}}
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
 spec:
   sourceRepos:
     - https://github.com/{{ORG}}/{{REPO}}.git
@@ -491,7 +533,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: "{{TEAM_NAME}}-{{APP_NAME}}-{{ENV}}"
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

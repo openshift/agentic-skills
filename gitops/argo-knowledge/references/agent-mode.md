@@ -8,6 +8,21 @@ the need for the control plane to have direct API access to workload clusters.
 **Docs:** [argocd-agent.readthedocs.io](https://argocd-agent.readthedocs.io/latest/)
 **Status:** GA in Red Hat OpenShift GitOps 1.19; upstream still pre-v1
 
+> **Scope: architecture and decision-making only.** This file covers what the components
+> are, how the operational modes differ, and when agent mode is the right choice — enough
+> to design a topology and justify it.
+>
+> It deliberately contains **no manifests, install commands, mTLS/certificate issuance
+> steps, or sizing numbers.** The project is pre-v1 upstream and those details move
+> between releases; stale YAML here would be worse than none.
+>
+> Answer architecture and "should we use this" questions from this file. For anything
+> installable — agent deployment, principal configuration, cert issuance, CLI flags —
+> say that this skill covers the design, then point to the
+> [upstream docs](https://argocd-agent.readthedocs.io/latest/) and, on OpenShift, the Red
+> Hat OpenShift GitOps 1.19+ documentation. Do not reconstruct the configuration from
+> memory: version drift here produces confident, wrong setup instructions.
+
 ## Architecture
 
 ### Components

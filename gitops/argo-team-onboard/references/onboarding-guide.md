@@ -17,7 +17,7 @@ templates for every resource, and a post-onboarding validation checklist.
 
 | Resource | Include When | Skip When |
 |----------|-------------|-----------|
-| Namespace | Team gets new namespaces not yet on cluster | Namespaces pre-provisioned by platform or another controller |
+| Namespace | **Always generate the manifest** when the team gets new namespaces — it carries the Pod Security Standards labels, which nothing else adds | Skip only when the namespace already exists AND you have confirmed it already has PSS labels and NetworkPolicies. An existing namespace is *not* evidence of either |
 | ResourceQuota | Platform enforces compute/object limits per team | Cluster uses LimitRange only, or no quota policy exists |
 | LimitRange | Platform requires default CPU/memory requests on all pods | Quota policy handles limits at the namespace level |
 | RoleBinding | Team needs `kubectl` access to their namespaces (not just Argo CD) | Team interacts only through Argo CD UI/CLI |
@@ -32,9 +32,15 @@ templates for every resource, and a post-onboarding validation checklist.
 | Container registry | Registry provisioning is infrastructure, not GitOps onboarding. | Platform team's registry provisioning runbook |
 | Secrets backend | External Secrets Operator, Sealed Secrets, or Vault CSI are separate platform services. | `external-secrets` or `sealed-secrets` operator docs |
 | Ingress/DNS | Domain provisioning and TLS cert issuance are infrastructure concerns. | Platform team's ingress/DNS runbook |
-| NetworkPolicy | Network segmentation is platform-managed, not team-managed. | Platform team's network policy templates |
+| ~~NetworkPolicy~~ | **No longer out of scope — this skill generates the tenant's default policies.** Network segmentation is platform-managed, and this skill *is* the platform team's onboarding path, so it must create them. The AppProject `namespaceResourceBlacklist` stops the *team* editing them; it does not create them. See *Default NetworkPolicies* below. | — |
 
 ## AppProject Template
+
+> **Sync-window selectors are OR-ed, not AND-ed.** Argo CD: *"If more than one option is
+> specified, by default, the enabled options will be OR-ed."* So
+> `applications: ['*']` alongside `namespaces: [...]` matches **every Application on the
+> instance**, not the intersection — a deny window meant to freeze one tenant freezes
+> everyone. Use exactly one selector unless you genuinely want the union.
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -49,11 +55,16 @@ spec:
   description: "Project for {{TEAM_NAME}} team"
 
   # --- Source restrictions ---
-  # List ONLY team's repos. Never use '*'.
+  # Prefer an explicit list. A bounded org+team prefix glob is acceptable when the team
+  # genuinely adds repos often; a bare '*' never is. The line to hold: the pattern must
+  # not match repos outside this team's namespace in the org.
+  #   OK       https://github.com/acme/payments-*.git
+  #   OK       explicit list of 3 repo URLs
+  #   NOT OK   '*'  |  https://github.com/acme/*  |  https://github.com/*
   sourceRepos:
-    - https://github.com/{{ORG}}/{{TEAM_NAME}}-*.git  # Wildcard for team's repos
+    - https://github.com/{{ORG}}/{{TEAM_NAME}}-*.git  # bounded: org AND team prefix
     # - https://charts.example.com                    # Add Helm repos if needed
-    # - oci://registry.example.com/charts             # OCI Helm registry
+    # - registry.example.com/charts                   # OCI Helm registry (no oci:// scheme)
 
   # --- Destination restrictions ---
   # List ONLY team's namespaces. Never use server: '*' or namespace: '*'.
@@ -125,7 +136,7 @@ spec:
   #     duration: 62h                                # Until Monday 8am UTC
   #     applications: ['*']
   #     namespaces: ['{{TEAM_NAME}}-prod']
-  #     manualSync: false                            # Allow manual syncs during deny
+  #     manualSync: false                            # (default) manual syncs blocked too; set true to allow them
 ```
 
 ## Application Templates
@@ -137,7 +148,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: "{{TEAM_NAME}}-{{APP_NAME}}-{{ENV}}"        # e.g. payments-api-prod
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift; see the $NS note
   labels:
     team: "{{TEAM_NAME}}"
     env: "{{ENV}}"
@@ -193,7 +204,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: "{{TEAM_NAME}}-{{APP_NAME}}-{{ENV}}"
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift; see the $NS note
   labels:
     team: "{{TEAM_NAME}}"
     env: "{{ENV}}"
@@ -210,8 +221,8 @@ spec:
     chart: "{{CHART_NAME}}"
     targetRevision: "1.2.3"                          # Pin chart version, never '*'
 
-    # Option B: OCI registry
-    # repoURL: oci://registry.example.com/charts
+    # Option B: OCI registry (no oci:// scheme — implied by enableOCI on the repo Secret)
+    # repoURL: registry.example.com/charts
     # chart: "{{CHART_NAME}}"
     # targetRevision: "1.2.3"
 
@@ -264,7 +275,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: "{{TEAM_NAME}}-{{APP_NAME}}-{{ENV}}"
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift; see the $NS note
   labels:
     team: "{{TEAM_NAME}}"
     env: "{{ENV}}"
@@ -311,7 +322,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: "{{TEAM_NAME}}-{{APP_NAME}}-{{ENV}}"
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift; see the $NS note
   labels:
     team: "{{TEAM_NAME}}"
     env: "{{ENV}}"
@@ -359,7 +370,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: argocd-rbac-cm
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift; see the $NS note
 data:
   # Global RBAC policy (supplements project-level roles)
   policy.csv: |
@@ -409,12 +420,46 @@ kind: Namespace
 metadata:
   name: "{{TEAM_NAME}}-{{ENV}}"
   labels:
+    # Pod Security Standards — restricted is the correct default for a tenant namespace.
+    # Relax deliberately per workload; onboarding at privileged and tightening later
+    # rarely happens once workloads depend on the looser setting.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    openshift.io/cluster-monitoring: "true"         # opt into platform monitoring
     app.kubernetes.io/part-of: tenant-onboarding
     team: "{{TEAM_NAME}}"
     env: "{{ENV}}"
   annotations:
     openshift.io/description: "{{TEAM_NAME}} {{ENV}} namespace"
     # openshift.io/requester: "{{SSO_GROUP}}"       # OpenShift-specific
+```
+
+### Default NetworkPolicies
+
+**Generate these for every tenant namespace.** A namespace with no NetworkPolicy accepts
+traffic from every pod on the cluster — which undoes the AppProject boundary. Note that
+`namespaceResourceBlacklist` stops *teams* from editing policies; it does not create them.
+That is the platform team's job, which means this skill's job.
+
+See `references/gitops-onboarding.md`, *Default NetworkPolicies*, for the full four-policy
+set (default-deny egress with DNS allowed, same-namespace, router ingress, monitoring
+ingress) and the version-specific selector caveats.
+
+**The one mistake to avoid:** a bare default-deny-egress policy with no DNS exception
+breaks name resolution, and the failures present as application bugs rather than policy
+bugs. Always pair deny-all egress with:
+
+```yaml
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns   # 'kube-system' on vanilla K8s
+      ports:
+        - {protocol: UDP, port: 5353}
+        - {protocol: TCP, port: 5353}
 ```
 
 ### ResourceQuota (3 Tiers)
@@ -541,7 +586,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: argocd-notifications-cm
-  namespace: argocd
+  namespace: "{{ARGOCD_NAMESPACE}}"   # openshift-gitops on OpenShift; see the $NS note
 data:
   # Define trigger
   trigger.on-sync-failed: |
@@ -575,19 +620,19 @@ data:
 syncWindows:
   # Business hours only for production
   - kind: allow
-    schedule: '0 8 * * 1-5'                          # Mon-Fri 8am UTC
+    schedule: '0 8 * * 1-5'
+    timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off                          # Mon-Fri 8am UTC
     duration: 10h                                    # Until 6pm UTC
-    applications: ['*']
     namespaces: ['{{TEAM_NAME}}-prod']
-    manualSync: true                                 # Block manual syncs outside window too
+    manualSync: true                                 # ESCAPE HATCH: lets a human sync outside the window
 
   # Deny weekends for production
   - kind: deny
-    schedule: '0 18 * * 5'                           # Friday 6pm UTC
+    schedule: '0 18 * * 5'
+    timeZone: UTC                                  # REQUIRED in practice: a bare schedule is evaluated in the controller's timezone, so a window annotated 'UTC' can fire hours off                           # Friday 6pm UTC
     duration: 62h                                    # Until Monday 8am UTC
-    applications: ['*']
     namespaces: ['{{TEAM_NAME}}-prod']
-    manualSync: false                                # Allow manual syncs for emergencies
+    manualSync: false                                # (default) emergency manual syncs are ALSO blocked
 ```
 
 ## Validation Checklist
@@ -633,5 +678,5 @@ Run after every onboarding to verify isolation and access controls.
 ### Sync Window Verification (If Configured)
 
 - [ ] Sync blocked outside allow window: `argocd app sync` returns window error
-- [ ] Manual sync permitted during deny window (if `manualSync: false`)
+- [ ] Break-glass path is correct: `manualSync: true` PERMITS manual syncs the window blocks; `false` (default) blocks them too. Confirm which the team actually wants — this is routinely implemented backwards.
 - [ ] Dev/staging environments not affected by production sync windows

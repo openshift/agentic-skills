@@ -230,7 +230,9 @@ spec:
 
 ### Checklist
 
-- [ ] Install Argo Rollouts controller
+- [ ] Deploy the Rollouts controller via a **`RolloutManager` CR** — on OpenShift GitOps
+      you do NOT install argo-rollouts yourself; the operator reconciles it. Installing it
+      by hand fights the operator. See `references/openshift-gitops-operator.md`.
 - [ ] Create canary and stable Services
 - [ ] Replace `Deployment` with `Rollout` (same pod template)
 - [ ] Start with simple weight-based steps, no analysis
@@ -239,41 +241,6 @@ spec:
 - [ ] Configure traffic routing if available
 - [ ] Set up Rollouts dashboard/notifications
 
-## Workflow Resource Management
-
-### Checklist
-
-- [ ] **Always set `activeDeadlineSeconds`** — stuck workflows consume resources forever
-- [ ] **Configure `podGC`** — completed pods accumulate without it
-- [ ] **Set `ttlStrategy`** — auto-delete completed workflow CRs
-- [ ] **Use `retryStrategy`** with `backoff` for transient failures
-- [ ] **Limit `parallelism`** — prevent thundering herd
-- [ ] **Use `resourceQuota`** in the workflow namespace
-- [ ] **Archive workflows** to PostgreSQL/MySQL for long-term storage
-- [ ] **Use `workflowTemplateRef`** — avoid duplicating templates
-- [ ] **Set `podPriorityClassName`** for production workflows
-
-### Resource Defaults
-
-Configure defaults in the Workflow Controller ConfigMap:
-
-```yaml
-# workflow-controller-configmap
-data:
-  workflowDefaults: |
-    spec:
-      activeDeadlineSeconds: 7200
-      ttlStrategy:
-        secondsAfterCompletion: 86400
-        secondsAfterSuccess: 3600
-        secondsAfterFailure: 259200
-      podGC:
-        strategy: OnPodSuccess
-        deleteDelayDuration: 120s
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-```
 
 ## Secret Management Approaches
 

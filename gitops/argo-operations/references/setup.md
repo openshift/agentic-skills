@@ -1,5 +1,20 @@
 # Setup Reference — Installing and Configuring Argo CD
 
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 Step-by-step procedures for installing Argo CD. Each procedure follows the
 Generate-Preview-Confirm safety model.
 
@@ -30,8 +45,10 @@ helm install argocd argo/argo-cd \
   -f values.yaml \
   --wait --timeout 5m
 
-# 5. Verify
-kubectl get pods -n argocd -l app.kubernetes.io/part-of=argocd
+# 5. Verify — this selector is correct for a HELM install (Helm sets the label).
+#    Do NOT copy it to an operator-managed install: the operator does not set
+#    part-of on pods, so it returns nothing on a healthy cluster.
+kubectl get pods -n "$NS" -l app.kubernetes.io/part-of=argocd
 ```
 
 **Key values for non-HA:**
@@ -115,10 +132,10 @@ helm upgrade argocd argo/argo-cd \
   --wait --timeout 5m
 
 # 3. Verify
-kubectl rollout status deployment/argocd-server -n argocd
-kubectl rollout status deployment/argocd-repo-server -n argocd
-kubectl rollout status statefulset/argocd-application-controller -n argocd 2>/dev/null || \
-  kubectl rollout status deployment/argocd-application-controller -n argocd
+kubectl rollout status deployment/argocd-server -n "$NS"
+kubectl rollout status deployment/argocd-repo-server -n "$NS"
+kubectl rollout status statefulset/argocd-application-controller -n "$NS" 2>/dev/null || \
+  kubectl rollout status deployment/argocd-application-controller -n "$NS"
 ```
 
 ---
@@ -132,7 +149,10 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: openshift-gitops-operator
-  namespace: openshift-operators
+  # The OpenShift GitOps operator installs into its OWN namespace, not the shared
+  # openshift-operators. day2-operations.md assumes openshift-gitops-operator; an
+  # install here and an upgrade there would look in different places.
+  namespace: openshift-gitops-operator
 spec:
   channel: latest
   installPlanApproval: Automatic    # Or Manual for controlled upgrades
@@ -143,7 +163,7 @@ spec:
 
 ```bash
 # Preview
-kubectl apply --dry-run=server -f subscription.yaml
+kubectl apply --dry-run=server --validate=strict -f subscription.yaml
 
 # Apply (after user confirms)
 kubectl apply -f subscription.yaml
@@ -194,12 +214,14 @@ spec:
         memory: 256Mi
   ha:
     enabled: false
-  dex:
-    openShiftOAuth: true
-    resources:
-      limits:
-        cpu: 500m
-        memory: 256Mi
+  sso:                        # NOT top-level spec.dex — unsupported since operator v0.8.0
+    provider: dex
+    dex:
+      openShiftOAuth: true
+      resources:
+        limits:
+          cpu: 500m
+          memory: 256Mi
   rbac:
     defaultPolicy: role:readonly
     policy: |
@@ -221,13 +243,17 @@ spec:
 
 ```bash
 # Preview
-kubectl diff -f argocd-cr.yaml 2>/dev/null || kubectl apply --dry-run=server -f argocd-cr.yaml
+kubectl diff -f argocd-cr.yaml 2>/dev/null || kubectl apply --dry-run=server --validate=strict -f argocd-cr.yaml
 
 # Apply (after user confirms)
 kubectl apply -f argocd-cr.yaml
 
-# Verify
-kubectl get pods -n openshift-gitops -l app.kubernetes.io/part-of=argocd
+# Verify — do NOT use -l app.kubernetes.io/part-of=argocd here. The operator does not
+# set that label on pods, so the selector returns nothing on a perfectly healthy install
+# and reads as "nothing got deployed". Enumerate instead.
+kubectl get pods -n openshift-gitops -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[0].ready,STATUS:.status.phase
+kubectl get argocd -n openshift-gitops -o jsonpath='phase={.items[0].status.phase}{"\n"}'
+# Every component should be Running/true and the ArgoCD CR phase should be Available.
 kubectl get route -n openshift-gitops
 ```
 
@@ -468,13 +494,13 @@ stringData:
 
 ```bash
 # Preview
-kubectl apply --dry-run=server -f cluster-secret.yaml
+kubectl apply --dry-run=server --validate=strict -f cluster-secret.yaml
 
 # Apply (after user confirms)
 kubectl apply -f cluster-secret.yaml
 
 # Verify
-argocd cluster list 2>/dev/null || kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=cluster
+argocd cluster list 2>/dev/null || kubectl get secrets -n "$NS" -l argocd.argoproj.io/secret-type=cluster
 ```
 
 **Note:** Never commit cluster Secrets to Git in plain text. Use sealed-secrets,
@@ -546,11 +572,11 @@ spec:
 
 ```bash
 # Preview
-kubectl apply --dry-run=server -f appproject.yaml
+kubectl apply --dry-run=server --validate=strict -f appproject.yaml
 
 # Apply (after user confirms)
 kubectl apply -f appproject.yaml
 
 # Verify
-argocd proj get production 2>/dev/null || kubectl get appproject production -n argocd -o yaml
+argocd proj get production 2>/dev/null || kubectl get appproject production -n "$NS" -o yaml
 ```

@@ -1,5 +1,20 @@
 # Deployment Reference — Creating and Managing Applications
 
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 Step-by-step procedures for creating Applications, ApplicationSets, and related
 configuration. Every procedure follows the Generate-Preview-Confirm safety model.
 
@@ -54,10 +69,39 @@ spec:
 **OCI Helm source:**
 ```yaml
 source:
-  repoURL: oci://registry.example.com/charts
+  # NOTE: the oci:// scheme is OMITTED here — registry host + path only.
+  # Including it is the most common OCI mistake; see the warning below.
+  repoURL: registry.example.com/charts
   chart: my-app
   targetRevision: ">=2.0.0 <3.0.0"    # Semver constraint
 ```
+
+> **Do not put `oci://` in `repoURL`.** The Argo CD docs state explicitly: *"note: the
+> `oci://` syntax is not included."* The scheme is implied by registering the repository
+> with `enableOCI: "true"` — see below. Including it produces a chart-pull failure that
+> reads like an auth or network problem rather than a URL format problem.
+
+**Registering the OCI registry** (required before the Application can pull):
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oci-helm-registry
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  name: my-oci-registry
+  url: registry.example.com/charts   # again, no oci:// scheme
+  type: helm                         # OCI Helm registries are type: helm
+  enableOCI: "true"                  # string, not boolean — this is what enables OCI
+  # username: <user>                 # add for private registries
+  # password: <token>
+```
+
+`enableOCI` must be the **string** `"true"`. A YAML boolean in a Secret `stringData`
+block is a common silent failure.
 
 ### Kustomize Source
 
@@ -141,7 +185,7 @@ cat > application.yaml << 'EOF'
 EOF
 
 # 2. Server-side dry-run (validates against API server)
-kubectl apply --dry-run=server -f application.yaml
+kubectl apply --dry-run=server --validate=strict -f application.yaml
 
 # 3. If CRD not installed, fall back to client-side
 kubectl apply --dry-run=client -f application.yaml
@@ -150,7 +194,7 @@ kubectl apply --dry-run=client -f application.yaml
 kubectl apply -f application.yaml
 
 # 5. Verify
-kubectl get application <name> -n argocd -o jsonpath='{.status.sync.status}'
+kubectl get applications.argoproj.io <name> -n "$NS" -o jsonpath='{.status.sync.status}'
 ```
 
 ### Using argocd CLI
@@ -197,7 +241,9 @@ spec:
           - path: addons/*
           - path: addons/experimental-*
             exclude: true
-  preserveResourcesOnDeletion: true
+  syncPolicy:
+    # Must be under spec.syncPolicy — at spec level the API server silently prunes it.
+    preserveResourcesOnDeletion: true
   template:
     metadata:
       name: 'addon-{{.path.basename}}'
@@ -380,7 +426,55 @@ syncPolicy:
 
 ## Notifications Setup
 
-### ConfigMap + Secret
+### Pick the right path first: operator-managed vs standalone
+
+**On OpenShift GitOps, do NOT hand-write `argocd-notifications-cm`.** That ConfigMap is
+operator-managed; your edits apply cleanly and are then reconciled away, which presents
+as notifications that worked in testing and silently stopped. Use the CRDs:
+
+```yaml
+# 1. turn the controller on
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: openshift-gitops
+  namespace: openshift-gitops
+spec:
+  notifications:
+    enabled: true          # required field
+---
+# 2. supply config via the CR, not the ConfigMap
+apiVersion: argoproj.io/v1alpha1
+kind: NotificationsConfiguration
+metadata:
+  name: default-notifications-configuration
+  namespace: openshift-gitops
+spec:
+  services:
+    service.slack: |
+      token: $slack-token
+  templates:
+    template.app-sync-failed: |
+      message: "{{.app.metadata.name}} sync failed: {{.app.status.operationState.message}}"
+  triggers:
+    trigger.on-sync-failed: |
+      - when: app.status.operationState.phase in ['Error', 'Failed']
+        send: [app-sync-failed]
+```
+
+Every field is `map[string]string`, including `subscriptions`. The Secret
+(`argocd-notifications-secret`) is still yours to create — the CR holds no credentials.
+Full field reference and gotchas: `argo-knowledge/references/openshift-gitops-operator.md`.
+
+Decide before generating anything:
+
+```bash
+kubectl get argocd -A --no-headers 2>/dev/null | head   # non-empty => operator-managed
+```
+
+The ConfigMap form below applies to **standalone / Helm-installed Argo CD only**.
+
+### ConfigMap + Secret (standalone Argo CD only)
 
 ```yaml
 apiVersion: v1

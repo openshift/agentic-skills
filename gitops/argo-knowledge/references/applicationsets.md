@@ -1,5 +1,20 @@
 # ApplicationSet Reference
 
+> **Namespace:** `$NS` below is the Argo CD instance's namespace. It is **`openshift-gitops`
+> on OpenShift GitOps**, `argocd` on a standalone install, and something else entirely for a
+> second instance. There is frequently more than one — resolve it once and reuse it:
+>
+> ```bash
+> kubectl get argocd -A    # operator-managed instances and their namespaces
+> NS=openshift-gitops      # set to the instance you are working on
+> ```
+>
+> The same applies to `namespace: argocd` inside the YAML below — it is a placeholder for
+> the Argo CD instance's namespace. An Application created in `argocd` on a cluster whose
+> instance lives in `openshift-gitops` is never picked up, with no error anywhere.
+> (`namespace:` on an Application's **destination** is a different field — that one is the
+> workload's namespace and is unrelated.)
+
 ## Overview
 
 ApplicationSet is a controller that generates Argo CD Applications from a template combined with one or more generators. It enables managing many Applications at scale.
@@ -24,8 +39,10 @@ spec:
       project: <project>
       source: {}
       destination: {}
-      syncPolicy: {}
-  preserveResourcesOnDeletion: false    # Keep generated Applications' resources when deleting AppSet
+      syncPolicy: {}                    # the generated Application's sync policy
+  syncPolicy:                           # the ApplicationSet's own sync policy — different thing
+    preserveResourcesOnDeletion: false  # Keep generated Applications' resources when deleting AppSet
+    applicationsSync: create-update     # create-only | create-update | create-delete
   strategy: {}                          # Progressive sync strategy
   templatePatch: ""                     # JSON merge patch applied to template
 ```
@@ -43,7 +60,10 @@ spec:
 
 **Always use Go templates** for new ApplicationSets. Fasttemplate is legacy.
 
-Go template pitfall: `{{.path.basename}}` works, but `{{.path[0]}}` does not. Use `index .path 0` for array access.
+Go template pitfall: `{{.path.basename}}` works, but `{{.path[0]}}` does not. **`.path` is
+a map, not an array** — its keys are `path`, `basename`, `basenameNormalized` and
+`segments`. For a path segment use `index .path.segments N`; plain `index .path N` fails
+to render.
 
 ## Generators
 
@@ -68,7 +88,7 @@ generators:
 - `{{.path.path}}` — Full path (e.g., `apps/my-app`)
 - `{{.path.basename}}` — Directory name (e.g., `my-app`)
 - `{{.path.basenameNormalized}}` — DNS-safe name (e.g., `my-app`)
-- `{{.path[N]}}` — Nth path segment (use `index .path N`)
+- `{{ index .path.segments N }}` — Nth path segment (0-indexed). **Not** `index .path N`: `.path` is a map, so that form does not render.
 
 ### Git File Generator
 
@@ -358,14 +378,66 @@ spec:
 
 ```yaml
 spec:
-  preserveResourcesOnDeletion: true
+  syncPolicy:
+    preserveResourcesOnDeletion: true
 ```
+
+**Placement matters.** This field lives at `spec.syncPolicy.preserveResourcesOnDeletion`.
+There is no `spec.preserveResourcesOnDeletion` — the ApplicationSet CRD is a structural
+schema, so the API server **silently prunes** the misplaced key. The resource applies
+cleanly, `kubectl get` shows no error, and you believe you have deletion protection that
+does not exist. Verify with:
+
+```bash
+kubectl get applicationset <name> -n "$NS" -o jsonpath='{.spec.syncPolicy}'
+```
+
+Do not confuse it with `spec.template.spec.syncPolicy`, which is the *generated
+Application's* sync policy (automated/prune/selfHeal) — a different field at a different
+level.
 
 When the ApplicationSet is deleted:
 - `false` (default) — All generated Applications and their cluster resources are deleted
 - `true` — Generated Applications are deleted, but their managed cluster resources are left in place (orphaned)
 
 This is a safety mechanism. Use `true` in production to prevent accidental mass deletion.
+
+## ignoreApplicationDifferences
+
+Stops the ApplicationSet controller from reverting specific fields on the Applications it
+generates. Without it, the controller continuously reconciles generated Applications back
+to the template — so anything that legitimately mutates an Application after creation
+fights the controller in a loop.
+
+```yaml
+spec:
+  ignoreApplicationDifferences:
+    - jsonPointers:
+        - /spec/source/targetRevision      # let the image updater bump the revision
+    - name: my-app-staging                 # scope to one generated Application
+      jqPathExpressions:
+        - .spec.source.helm.values
+```
+
+Per-item fields (all optional except that you need one of the two expression forms):
+
+| Field | Purpose |
+|-------|---------|
+| `name` | Limit the rule to a single generated Application. Omit to apply to all of them. |
+| `jsonPointers` | RFC 6901 pointers, e.g. `/spec/source/targetRevision` |
+| `jqPathExpressions` | jq paths, e.g. `.spec.source.helm.values` — use for anything a pointer cannot express |
+
+**When you need it:**
+- **argocd-image-updater with `write-back-method: argocd`** — the updater writes
+  `targetRevision`/Helm parameters onto the live Application; without this the
+  ApplicationSet reverts them on the next reconcile and the image never sticks.
+- **Manually paused or pinned Applications** in an otherwise generated fleet.
+- **Controller- or user-mutated fields** you deliberately do not manage from the template.
+
+Do not confuse this with `spec.template.spec.ignoreDifferences`, which is the generated
+*Application's* own setting for ignoring drift between Git and the **cluster**.
+`ignoreApplicationDifferences` governs drift between the **template and the Application
+object** — a different layer entirely.
 
 ## templatePatch
 

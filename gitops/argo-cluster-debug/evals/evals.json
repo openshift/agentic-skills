@@ -13,7 +13,8 @@
         "Identifies which resources are out of sync or unhealthy",
         "Inspects the unhealthy managed resources (Deployments, Pods)",
         "Checks pod logs or events for failing containers",
-        "Produces a report with root cause and recommendations"
+        "Produces a report with root cause and recommendations. Every root cause asserted is backed by the specific observation that establishes it (a field value, pod phase, restart count, condition, or log line actually shown). A cause asserted with no supporting output, or contradicted by output shown elsewhere in the same answer, fails this expectation even if it is plausible and well written.",
+        "Every recommended action states its IMPACT \u2014 what else is affected if someone acts on it (components that restart, other Applications or tenants affected, whether anything is deleted, and any ordering dependency on another recommendation) \u2014 not only its priority. 'Impact: nothing else is affected' counts; omitting the impact entirely does not. An impact reasoned from manifests rather than verified against a cluster must say so."
       ]
     },
     {
@@ -25,10 +26,10 @@
         "Identifies the current step index and what step 2 is",
         "Checks pause conditions (manual pause vs analysis-driven)",
         "Inspects associated AnalysisRuns if analysis is involved",
-        "Checks metric results and measurements in the AnalysisRun",
-        "Inspects traffic routing configuration if configured",
+        "Checks the AnalysisRun's metric results and measurements, and reports the measurement phase actually observed rather than assuming a failure. An analysis still in Running with an in-flight measurement is a different diagnosis from one that returned Failed, and the answer must show which it is (phase, measurement count, or the underlying job/pod state) before recommending anything.",
+        "Checks spec.strategy.canary.trafficRouting and reports what it finds. If no traffic routing is configured, says so explicitly and explains the consequence \u2014 the canary weight is approximated by replica counts rather than a real traffic split, so setWeight: 20 means pods, not 20% of requests. Reporting the absence with that consequence is a full pass; silently omitting the check is not.",
         "Compares stable vs canary ReplicaSets and pod status",
-        "Produces a report with root cause and recommendations"
+        "Produces a report with root cause and recommendations. Every root cause asserted is backed by the specific observation that establishes it (a field value, pod phase, restart count, condition, or log line actually shown). A cause asserted with no supporting output, or contradicted by output shown elsewhere in the same answer, fails this expectation even if it is plausible and well written."
       ]
     },
     {
@@ -42,36 +43,86 @@
         "Checks core component health (server, repo-server, application-controller)",
         "Reports the Argo CD version",
         "Inspects configuration (argocd-cm or ArgoCD CR)",
-        "Reports any unhealthy components with diagnostic details",
-        "Produces a structured status report"
+        "Reports any unhealthy components with diagnostic details, citing for each one the observation that establishes it (pod phase and restart count, a CSV/InstallPlan condition, or a CRD field value). Claiming a component is down while output in the same answer shows it Running is a fail.",
+        "Produces a structured status report",
+        "If an operator upgrade or reconcile is reported as blocked, names the specific blocking object and field rather than asserting it generally \u2014 for example the failing InstallPlan and the CRD conversion-webhook setting it failed on, not merely 'the operator is unhealthy'."
       ]
     },
     {
       "id": 4,
-      "name": "Workflow build-pipeline failing",
-      "prompt": "My Argo Workflow build-pipeline in the argo namespace keeps failing at the docker-build step. Debug it.",
+      "name": "ApplicationSet not generating expected Applications",
+      "prompt": "My ApplicationSet team-apps in the openshift-gitops namespace uses a git directory generator but isn't creating any Application resources for the new service directories I added. Debug it.",
       "expectations": [
-        "Retrieves the Workflow and identifies its phase as Failed",
-        "Identifies the failed node (docker-build) from status.nodes",
-        "Gets logs for the failed pod",
-        "Checks for common failure patterns (OOMKilled, ImagePullBackOff, permission denied)",
-        "Checks resource limits on the docker-build template",
-        "Checks ServiceAccount permissions",
-        "Produces a report with root cause and recommendations"
+        "Retrieves the ApplicationSet and checks its status.conditions",
+        "Identifies the generator type (git directory) and its configuration (repoURL, directories path pattern)",
+        "Lists currently generated Applications and cross-references against what's expected",
+        "Checks the applicationset-controller logs for generator errors",
+        "Identifies a likely cause (path pattern mismatch, repo access, or an exclude rule)",
+        "Produces a report with root cause and recommendations. Every root cause asserted is backed by the specific observation that establishes it (a field value, pod phase, restart count, condition, or log line actually shown). A cause asserted with no supporting output, or contradicted by output shown elsewhere in the same answer, fails this expectation even if it is plausible and well written."
       ]
     },
     {
       "id": 5,
-      "name": "EventSource not receiving events",
-      "prompt": "The EventSource github-webhook in the events namespace isn't receiving events. Debug it.",
+      "name": "ApplicationSet RollingSync stuck on production step",
+      "prompt": "Our ApplicationSet uses a RollingSync strategy across staging and production. Staging has been updated but production apps haven't started syncing. Why?",
       "expectations": [
-        "Retrieves the EventSource and checks its status conditions",
-        "Verifies the EventBus exists and its pods are running",
-        "Checks EventSource pod status and logs",
-        "Checks if the webhook Service/Ingress/Route is configured",
-        "Checks associated Sensor status",
-        "Analyzes connectivity (webhook reachable, firewall, DNS)",
-        "Produces a report with root cause and recommendations"
+        "Retrieves the ApplicationSet and inspects spec.strategy.rollingSync.steps",
+        "Identifies which step/matchExpressions group production falls into",
+        "Checks whether the staging step's maxUpdate requirement and health gate have been satisfied",
+        "Debugs the staging Applications' health status, since an unhealthy staging app blocks progression to the next step",
+        "Explains how RollingSync blocks progression on unhealthy or unsynced apps in the current step",
+        "Produces a report with root cause and recommendations. Every root cause asserted is backed by the specific observation that establishes it (a field value, pod phase, restart count, condition, or log line actually shown). A cause asserted with no supporting output, or contradicted by output shown elsewhere in the same answer, fails this expectation even if it is plausible and well written.",
+        "Every recommended action states its IMPACT \u2014 what else is affected if someone acts on it (components that restart, other Applications or tenants affected, whether anything is deleted, and any ordering dependency on another recommendation) \u2014 not only its priority. 'Impact: nothing else is affected' counts; omitting the impact entirely does not. An impact reasoned from manifests rather than verified against a cluster must say so."
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Blue-green rollout stuck at preview, never promotes",
+      "prompt": "The blue-green rollout for checkout-api in namespace prod is sitting at the preview stage and has not promoted. autoPromotionEnabled is false. The team expected it to analyze automatically. Debug it.",
+      "expectations": [
+        "Retrieves the Rollout and identifies strategy.blueGreen configuration",
+        "Checks autoPromotionEnabled and explains that false requires manual promotion, not automatic analysis",
+        "Checks for prePromotionAnalysis templates and their status if configured",
+        "Inspects previewService and activeService configuration for correctness",
+        "Distinguishes blue-green behavior from canary (no step-based automatic progression)",
+        "Produces a report with root cause and recommendations. Every root cause asserted is backed by the specific observation that establishes it (a field value, pod phase, restart count, condition, or log line actually shown). A cause asserted with no supporting output, or contradicted by output shown elsewhere in the same answer, fails this expectation even if it is plausible and well written."
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Ambiguous debug request with multiple Argo CD instances",
+      "prompt": "Something's wrong with Argo CD on this cluster but I don't know which instance \u2014 we have more than one. Check what's going on.",
+      "expectations": [
+        "Detects multiple Argo CD instances (multiple namespaces with argocd-labeled pods or multiple ArgoCD CRs)",
+        "Lists all detected instances with their namespaces",
+        "Asks the user which instance to investigate, or investigates all and clearly separates findings per instance",
+        "Does not silently pick one instance without disclosing the ambiguity",
+        "Produces a report structured per instance, naming each Argo CD instance found and stating that instance's own findings under it. A single flat report that merges findings across instances, or that names only one instance when several exist, fails this expectation."
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Suspended Application reported as broken",
+      "prompt": "My Application billing-service in namespace finance shows as Suspended and the team thinks it's broken. Debug it.",
+      "expectations": [
+        "Retrieves the Application and identifies health.status as Suspended",
+        "Explains that Suspended reflects an intentionally paused resource (e.g. a paused CronJob or Rollout), not a failure",
+        "Inspects the underlying managed resource and states what is suspended, citing the field that shows it (for example a Rollout's spec.paused or a CronJob's spec.suspend) rather than inferring it from the Application's aggregate health.",
+        "Does not treat Suspended as an error requiring remediation unless the user confirms it's unintended",
+        "Produces a report that separates the intentional suspension from any genuine problem found alongside it, saying explicitly which is which. Reporting only the suspension when live output shows a real failure, or treating the suspension itself as the failure, fails this expectation.",
+        "Reports the suspended workload's ACTUAL readiness from live output \u2014 pod phase and restart count, and whether the Services have endpoints \u2014 instead of assuming the pause is the only thing happening. Suspended health can mask an unrelated failure, so an explanation of why the workload is not Available that is not backed by shown output is a fail."
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Multi-source Application with one failing source",
+      "prompt": "My Application platform-ui uses multiple sources \u2014 a Helm chart and a separate values repo. It's OutOfSync and I don't know which source is the problem.",
+      "expectations": [
+        "Detects the Application uses spec.sources[] (multi-source), not spec.source",
+        "Iterates every entry in spec.sources[] individually, checking repoURL, targetRevision, path, and Helm valueFiles for each",
+        "Identifies which specific source is failing (e.g. wrong values file path, inaccessible repo, or bad targetRevision)",
+        "Does not treat a multi-source Application as if it were single-source",
+        "Produces a report naming WHICH source is at fault \u2014 by index AND repoURL, not just 'a source' \u2014 and the concrete fix. Must distinguish the source Argo CD's error blames (the one being rendered) from the source that actually lacks the file, rather than only repeating 'source N of 2' from the error text."
       ]
     }
   ]

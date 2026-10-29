@@ -39,8 +39,55 @@ through environment sequences.
 | ClusterScmProvider | promoter.argoproj.io/v1alpha1 | Cluster-scoped SCM provider config |
 | GitRepository | promoter.argoproj.io/v1alpha1 | Repository reference (owner, name, SCM provider ref) |
 | CommitStatus | promoter.argoproj.io/v1alpha1 | Set commit status on a SHA (pending/success/failure) |
+| ArgoCDCommitStatus | promoter.argoproj.io/v1alpha1 | Auto-reports Argo CD Application health as a CommitStatus — see *Integration with Argo CD* |
 | PullRequest | promoter.argoproj.io/v1alpha1 | Manage PR lifecycle (open/merged/closed) |
 | RevertCommit | promoter.argoproj.io/v1alpha1 | Revert a specific commit |
+| GitCommitStatus | promoter.argoproj.io/v1alpha1 | Commit status derived from Git state |
+| TimedCommitStatus | promoter.argoproj.io/v1alpha1 | Time-based gate — soak/bake period before promotion |
+| WebRequestCommitStatus | promoter.argoproj.io/v1alpha1 | Gate on an external HTTP check |
+| ControllerConfiguration | promoter.argoproj.io/v1alpha1 | Promoter controller settings |
+
+> To see what is actually installed on a cluster:
+> `kubectl get crd -o name | grep promoter.argoproj.io`
+
+### How a gate is matched to a commit status
+
+A `PromotionStrategy` references gates by **key**, not by resource name:
+
+```yaml
+spec:
+  activeCommitStatuses:
+    - key: argocd-app-health      # matches a CommitStatus whose spec.name is this key
+  proposedCommitStatuses:
+    - key: security-scan
+```
+
+The key is matched against the CommitStatus resource's `spec.name`. Writing one from CI:
+
+```yaml
+apiVersion: promoter.argoproj.io/v1alpha1
+kind: CommitStatus
+metadata:
+  name: security-scan-abc1234
+spec:
+  name: security-scan          # <- the key the PromotionStrategy gates on
+  sha: abc1234def5678          # the commit being gated
+  phase: success               # pending | success | failure
+  description: "Trivy scan passed, 0 critical"
+  url: https://ci.example.com/runs/4821   # surfaced in the SCM status check
+  gitRepositoryRef:
+    name: my-repo
+```
+
+Verified `spec` fields: `name`, `sha`, `phase`, `description`, `url`, `gitRepositoryRef`.
+
+A gate whose key has no corresponding CommitStatus **blocks the promotion indefinitely**
+rather than erroring — the PR simply never merges. When a promotion appears stuck with no
+failure, list the statuses and compare keys before looking anywhere else:
+
+```bash
+kubectl get commitstatus -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,KEY:.spec.name,PHASE:.status.phase
+```
 
 ## Supported SCM Providers
 
@@ -130,9 +177,8 @@ metadata:
 type: Opaque
 stringData:
   githubAppPrivateKey: |
-    -----BEGIN RSA PRIVATE KEY-----
-    <your-private-key>
-    -----END RSA PRIVATE KEY-----
+    <paste the GitHub App's PEM private key here, including its
+     BEGIN/END lines, indented to this level>
 ---
 apiVersion: promoter.argoproj.io/v1alpha1
 kind: ScmProvider
@@ -200,7 +246,7 @@ GitOps Promoter is designed to work alongside Argo CD:
    `environment/prod`) is a source for an Argo CD Application or ApplicationSet
 2. **Argo CD reports health via CommitStatus** — use the `argocd-app-health` commit status
    key as an `activeCommitStatus` to gate promotions on Argo CD sync/health
-3. **ArgoCD CommitStatus CRD** — the promoter includes an `ArgocdCommitStatus` resource
+3. **ArgoCD CommitStatus CRD** — the promoter includes an `ArgoCDCommitStatus` resource
    that automatically reports Argo CD Application health as a commit status
 
 ### Example: Argo CD Application per Environment
@@ -247,16 +293,28 @@ spec:
 
 ```yaml
 apiVersion: promoter.argoproj.io/v1alpha1
-kind: ArgocdCommitStatus
+kind: ArgoCDCommitStatus        # note the capitalisation: ArgoCD, not Argocd
 metadata:
   name: my-app-health
 spec:
-  gitRepositoryRef:
-    name: my-repo
-  applicationSelector:
+  # Both fields below are REQUIRED by the CRD.
+  promotionStrategyRef:         # which PromotionStrategy this status feeds
+    name: my-app-promotion
+  applicationSelector:          # which Argo CD Applications to report health for
     matchLabels:
       app.kubernetes.io/name: my-app
+  # url:                        # OPTIONAL — and it is an OBJECT, not a string.
+  #   template: "https://argocd.example.com/applications/{{.app.metadata.name}}"
+  #   options: []
+  # A bare string here fails admission. Verified: `kubectl explain
+  # argocdcommitstatus.spec.url` returns <Object> with template/options.
 ```
+
+> Verified against the installed CRD: `spec` accepts **`promotionStrategyRef`**,
+> **`applicationSelector`** (both required) and optional `url`. There is **no
+> `gitRepositoryRef`** on this kind — that field belongs to `CommitStatus`, and using it
+> here fails admission. Confirm on your cluster with:
+> `kubectl explain argocdcommitstatus.spec`
 
 This automatically creates CommitStatus resources reflecting the Argo CD Application
 health, which the PromotionStrategy uses as an `activeCommitStatus` gate.

@@ -36,6 +36,54 @@ grep -rn -A5 "destinations:" <repo-root> --include="*.yaml" --include="*.yml" | 
 grep -rn -A3 "clusterResourceWhitelist" <repo-root> --include="*.yaml" --include="*.yml" | grep -E "group:.*'\*'|kind:.*'\*'"
 ```
 
+### Scanning: Find *enumerated* but privilege-escalating clusterResourceWhitelist
+
+**The wildcard scan above is not sufficient, and this is the more common real-world case.**
+An explicitly enumerated whitelist that grants cluster-scoped RBAC or admission kinds
+contains no `*`, passes every wildcard grep, and reads as careful least-privilege in
+review — while voiding the AppProject's `destinations` scoping entirely.
+
+A team allowed to commit a `ClusterRoleBinding` can bind themselves `cluster-admin`, and
+the Argo CD controller — which runs privileged — will apply it. Namespace scoping is
+irrelevant at that point.
+
+```bash
+# Escalation-capable kinds that should essentially never be team-whitelisted
+grep -rn -A20 "clusterResourceWhitelist" <repo-root> --include="*.yaml" --include="*.yml" | \
+  grep -E "kind:[[:space:]]*(ClusterRole|ClusterRoleBinding|RoleBinding|CustomResourceDefinition|MutatingWebhookConfiguration|ValidatingWebhookConfiguration|SecurityContextConstraints|PodSecurityPolicy|APIService|StorageClass|PriorityClass)"
+```
+
+| Kind | Why it is an escalation |
+|------|------------------------|
+| `ClusterRole`, `ClusterRoleBinding` | Self-grant any permission cluster-wide, including cluster-admin |
+| `RoleBinding` | Bind existing powerful ClusterRoles into any namespace in reach |
+| `CustomResourceDefinition` | Cluster-scoped; can shadow or conflict with platform CRDs |
+| `MutatingWebhookConfiguration`, `ValidatingWebhookConfiguration` | Intercept and rewrite *all* cluster API traffic |
+| `SecurityContextConstraints` (OpenShift), `PodSecurityPolicy` | Grant themselves privileged pod execution |
+| `APIService` | Hijack aggregated API endpoints |
+| `StorageClass`, `PriorityClass` | Cluster-wide resource and scheduling impact |
+
+Report any hit as **Critical**, even with no wildcard present. Expected safe entries are
+narrow and app-shaped — the team's own CRDs, or `Namespace` when they self-provision.
+
+### Scanning: Find scoped-but-dangerous project role policies
+
+The triple-wildcard RBAC grep further down misses project-scoped grants that are still too
+broad: a wildcard *action* on a narrowly scoped resource, and any `exec` grant.
+
+```bash
+# Wildcard action (applications, *) even when the project/app scope is narrow
+grep -rn -E "p,[^,]+,[[:space:]]*applications[[:space:]]*,[[:space:]]*\*" <repo-root> --include="*.yaml" --include="*.yml" --include="*.csv"
+
+# Any exec grant, at any scope — not just */*
+grep -rn -E "p,[^,]+,[[:space:]]*exec[[:space:]]*,[[:space:]]*create" <repo-root> --include="*.yaml" --include="*.yml" --include="*.csv"
+```
+
+`applications, *` includes `delete` and `override`, and lets the holder edit the
+Application spec — including repointing `source` outside the intended repo. `exec, create`
+gives a shell in any pod in scope, which exposes mounted ServiceAccount tokens and bypasses
+Kubernetes audit attribution. Scope to `get`, `sync`, and at most `override`.
+
 ---
 
 ## RBAC and Authentication
@@ -98,18 +146,54 @@ grep -rn "kind: Secret" <repo-root> --include="*.yaml" --include="*.yml" -l | wh
 done
 ```
 
-### Scanning: Find hardcoded credentials
+### Scanning: Find hardcoded credentials and keys
 
 ```bash
-grep -rn -iE "(password|token|secret|apikey|api_key):" <repo-root> --include="*.yaml" --include="*.yml" | \
-  grep -v "secretName\|secretKeyRef\|valueFrom\|kind:\|#" | head -20
+<repo-root>/scripts/scan-credentials.sh <repo-root>
 ```
 
-### Scanning: Find SSH keys
+**Use the script, not a bare `grep`.** The obvious one-liner —
 
 ```bash
-grep -rn "sshPrivateKey\|BEGIN.*PRIVATE KEY\|BEGIN RSA" <repo-root> --include="*.yaml" --include="*.yml"
+grep -rn -iE "(password|token|secret):" <repo-root>    # DO NOT
 ```
+
+— prints the whole matching line, which puts the credential itself into the
+conversation. An audit that leaks the thing it is auditing for is worse than no audit.
+The finding is the **location**, never the value.
+
+`scan-credentials.sh` reports file, line, key name and value *length*, which is enough
+to triage severity and find the string yourself. It also separates three cases a plain
+grep conflates:
+
+| Classified as | Meaning |
+|---|---|
+| `PLAINTEXT` | a real finding — treat as compromised, it is in git history |
+| `encrypted at rest` | SOPS or SealedSecret ciphertext in the same key — **not** a finding |
+| `marked synthetic / templated` | `# notsecret`, `EXAMPLE-`, `CHANGEME`, `${VAR}`, `{{ }}` |
+
+That last distinction matters: flagging SealedSecret ciphertext as a plaintext password
+is the false positive that teaches people to ignore the scanner.
+
+If you must inspect a value to judge severity, say so and ask first — do not print it
+unprompted.
+
+**Known limits of the scanner — read the Secret yourself as well.**
+
+- It keys off credential-ish *key names*, so it does not flag `username:`, `user:` or
+  `host:` even when they sit in the same committed Secret as a password it did flag.
+  Those are part of the same exposure. When a hit lands inside a `kind: Secret`, treat
+  every key in that object's `data`/`stringData` as exposed and say so — by key name,
+  not by value.
+- A value marked `EXAMPLE-` or `# notsecret` is classified synthetic and excluded from
+  the plaintext count. That is right for severity and wrong for the *pattern*: a marker
+  inside a `values: |` block scalar is passed to Helm verbatim, so a placeholder still
+  becomes the live credential. Report the anti-pattern even when the value is synthetic.
+- It reads YAML and JSON only. Credentials in a `.env`, a shell script or a Dockerfile
+  committed alongside the manifests are not scanned.
+
+A clean scan means "no credential-shaped key matched", not "this repo holds no
+secrets". Say which of those you are reporting.
 
 ### Scanning: Find cluster secrets
 
@@ -135,7 +219,10 @@ grep -rn "argocd.argoproj.io/secret-type: cluster" <repo-root> --include="*.yaml
 ### Scanning: Find insecure TLS config
 
 ```bash
-grep -rn "insecure: true\|insecure: \"true\"" <repo-root> --include="*.yaml" --include="*.yml"
+# Matches both YAML (insecure: true) and the quoted-JSON form that appears inside an
+# Argo CD cluster Secret's embedded `config` blob ("insecure": true) — the latter is how
+# it actually shows up in practice and the plain YAML pattern misses it entirely.
+grep -rniE '"?insecure"?[[:space:]]*:[[:space:]]*"?true' <repo-root> --include="*.yaml" --include="*.yml"
 ```
 
 ---
@@ -195,10 +282,10 @@ grep -rn "kind: ArgoCD" <repo-root> --include="*.yaml" --include="*.yml"
 grep -rn "kind: DeploymentConfig" <repo-root> --include="*.yaml" --include="*.yml"
 
 # Find Routes without TLS
-grep -A5 "kind: Route" <repo-root> --include="*.yaml" --include="*.yml" | grep -L "tls:"
+grep -rn -A5 "kind: Route" <repo-root> --include="*.yaml" --include="*.yml" | grep -L "tls:"
 
 # Find namespace-scoped instances with cluster permissions
-grep -B2 -A10 "kind: ArgoCD" <repo-root> --include="*.yaml" --include="*.yml" | grep -A10 "namespace:" | grep "clusterScoped\|cluster-admin"
+grep -rn -B2 -A10 "kind: ArgoCD" <repo-root> --include="*.yaml" --include="*.yml" | grep -A10 "namespace:" | grep "clusterScoped\|cluster-admin"
 ```
 
 ---
