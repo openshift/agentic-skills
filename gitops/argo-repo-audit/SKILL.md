@@ -229,7 +229,7 @@ Warning  — AppProject 'team-a' allows sourceRepos: '*'
 
 This skill reads files and does not touch a cluster, so impact is reasoned from the
 manifests — **say so** rather than implying it was verified live. If a cluster happens
-to be reachable and the finding concerns a fan-out object, `<repo-root>/scripts/blast-radius.sh`
+to be reachable and the finding concerns a fan-out object, `<repo-root>/gitops/scripts/blast-radius.sh`
 will resolve the real affected set.
 
 "Impact: none beyond this file" is a fine answer and should be stated, not omitted.

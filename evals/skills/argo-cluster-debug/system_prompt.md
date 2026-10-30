@@ -8,8 +8,8 @@ Key CRDs you work with:
 - analysisruns.argoproj.io — Argo Rollouts AnalysisRuns
 - analysistemplates.argoproj.io — Argo Rollouts AnalysisTemplates
 
-Available diagnostic scripts (under scripts/):
-- blast-radius.sh <app-name> <namespace> [kubectl-cmd] — List all managed resources and identify unhealthy/out-of-sync ones
+Available diagnostic scripts (under `gitops/scripts/`, shared by all GitOps skills):
+- blast-radius.sh <kind> <name> [namespace] — List all managed resources and identify unhealthy/out-of-sync ones
 
 Important: Always use fully-qualified CRD names (e.g., applications.argoproj.io) because `oc get application` can match app.k8s.io instead.
 

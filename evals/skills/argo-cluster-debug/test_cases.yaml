@@ -1,185 +1,301 @@
 # argo-cluster-debug skill eval test cases
 #
-# Each test case defines a query, mock commands, and expected output
-# patterns for validating the agent's diagnostic and remediation behavior
-# against Argo CD resources on OpenShift clusters.
-#
-# These test cases use mock command outputs to simulate cluster state
-# without requiring a live cluster.
+# Each test case sends a query with embedded cluster state to the agent and
+# verifies the structured response against a JSON Schema and expected field
+# values. No mock layer — the query contains the full simulated command output
+# the agent would see on a live cluster.
 
-- id: sync-error-rbac
-  description: "Diagnose and propose fix for RBAC-related sync failure"
-  prompt: "My Application payment-service in namespace openshift-gitops is stuck in SyncError. Debug it and fix it."
-  mock_commands:
-    - command: "oc -n openshift-gitops get applications.argoproj.io payment-service -o yaml"
-      output: |
-        apiVersion: argoproj.io/v1alpha1
-        kind: Application
-        metadata:
-          name: payment-service
-          namespace: openshift-gitops
-        spec:
-          destination:
-            namespace: payment
-            server: https://kubernetes.default.svc
-          source:
-            repoURL: https://github.com/example/payment-service
-            path: deploy
-            targetRevision: main
-        status:
-          sync:
-            status: OutOfSync
-          health:
-            status: Missing
-          conditions:
-            - type: SyncError
-              message: "one or more objects failed to apply, reason: deployments.apps is forbidden: User \"system:serviceaccount:openshift-gitops:openshift-gitops-argocd-application-controller\" cannot create resource \"deployments\" in API group \"apps\" in the namespace \"payment\""
-          operationState:
-            phase: Failed
-            message: "one or more objects failed to apply"
-    - command: "oc -n openshift-gitops get events --sort-by=.lastTimestamp"
-      output: |
-        LAST SEEN   TYPE      REASON    OBJECT                        MESSAGE
-        2m          Warning   SyncError application/payment-service   Failed sync: forbidden
-  expected_output:
-    contains:
-      - "RBAC"
-      - "forbidden"
-      - "RoleBinding"
-      - "payment"
-    remediation_proposed: true
+# Test 1: RBAC-related sync failure — forbidden error creating Deployments
+- name: sync_error_rbac_diagnosis
+  query: |
+    My Application payment-service in namespace openshift-gitops is stuck in SyncError. Debug it and propose a fix.
 
-- id: operator-version-check
-  description: "Detect OpenShift GitOps version from CSV, not CR"
-  prompt: "What version of OpenShift GitOps is installed on this cluster?"
-  mock_commands:
-    - command: "oc get csv -A -l operators.coreos.com/openshift-gitops-operator.openshift-gitops"
-      output: |
-        NAMESPACE            NAME                               DISPLAY                    VERSION   REPLACES                           PHASE
-        openshift-gitops     openshift-gitops-operator.v1.14.1  Red Hat OpenShift GitOps   1.14.1    openshift-gitops-operator.v1.14.0  Succeeded
-    - command: "oc -n openshift-gitops get argocd -o yaml"
-      output: |
-        apiVersion: argoproj.io/v1beta1
-        kind: ArgoCD
-        metadata:
-          name: openshift-gitops
-          namespace: openshift-gitops
-        status:
-          phase: Available
-  expected_output:
-    contains:
-      - "1.14.1"
-      - "CSV"
-      - "Succeeded"
+    The following is the output of `oc -n openshift-gitops get applications.argoproj.io payment-service -o yaml`:
 
-- id: stuck-progressing-remediation
-  description: "Application stuck Progressing, propose hard refresh"
-  prompt: "Application frontend in namespace openshift-gitops has been Progressing for 20 minutes. Fix it."
-  mock_commands:
-    - command: "oc -n openshift-gitops get applications.argoproj.io frontend -o yaml"
-      output: |
-        apiVersion: argoproj.io/v1alpha1
-        kind: Application
-        metadata:
+    ```yaml
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: payment-service
+      namespace: openshift-gitops
+    spec:
+      destination:
+        namespace: payment
+        server: https://kubernetes.default.svc
+      source:
+        repoURL: https://github.com/example/payment-service
+        path: deploy
+        targetRevision: main
+    status:
+      sync:
+        status: OutOfSync
+      health:
+        status: Missing
+      conditions:
+        - type: SyncError
+          message: "one or more objects failed to apply, reason: deployments.apps is forbidden: User \"system:serviceaccount:openshift-gitops:openshift-gitops-argocd-application-controller\" cannot create resource \"deployments\" in API group \"apps\" in the namespace \"payment\""
+      operationState:
+        phase: Failed
+        message: "one or more objects failed to apply"
+    ```
+
+    The following is the output of `oc -n openshift-gitops get events --sort-by=.lastTimestamp`:
+
+    ```
+    LAST SEEN   TYPE      REASON    OBJECT                        MESSAGE
+    2m          Warning   SyncError application/payment-service   Failed sync: forbidden
+    ```
+  schema:
+    type: object
+    properties:
+      root_cause:
+        type: string
+        enum: ["RBAC", "rbac", "forbidden", "permission"]
+        description: "The root cause category — an RBAC/permission issue"
+      target_namespace:
+        type: string
+        description: "The destination namespace where the permission is missing"
+      remediation_type:
+        type: string
+        enum: ["RoleBinding", "Role", "RBAC"]
+        description: "The type of Kubernetes resource needed to fix the issue"
+      missing_verb:
+        type: string
+        enum: ["create"]
+        description: "The verb that is forbidden"
+      missing_resource:
+        type: string
+        enum: ["deployments"]
+        description: "The resource type that cannot be acted on"
+    required: ["root_cause", "target_namespace", "remediation_type"]
+  expected:
+    root_cause: "RBAC"
+    target_namespace: "payment"
+    remediation_type: "RoleBinding"
+
+# Test 2: Operator version detection via CSV
+- name: operator_version_from_csv
+  query: |
+    What version of OpenShift GitOps is installed on this cluster?
+
+    The following is the output of `oc get csv -A -l operators.coreos.com/openshift-gitops-operator.openshift-gitops`:
+
+    ```
+    NAMESPACE            NAME                               DISPLAY                    VERSION   REPLACES                           PHASE
+    openshift-gitops     openshift-gitops-operator.v1.14.1  Red Hat OpenShift GitOps   1.14.1    openshift-gitops-operator.v1.14.0  Succeeded
+    ```
+
+    The following is the output of `oc -n openshift-gitops get argocd -o yaml`:
+
+    ```yaml
+    apiVersion: argoproj.io/v1beta1
+    kind: ArgoCD
+    metadata:
+      name: openshift-gitops
+      namespace: openshift-gitops
+    status:
+      phase: Available
+    ```
+  schema:
+    type: object
+    properties:
+      version:
+        type: string
+        description: "The installed OpenShift GitOps operator version"
+      source:
+        type: string
+        enum: ["CSV", "csv", "ClusterServiceVersion"]
+        description: "Where the version was detected from"
+      csv_phase:
+        type: string
+        enum: ["Succeeded", "succeeded"]
+        description: "The CSV phase status"
+    required: ["version", "source"]
+  expected:
+    version: "1.14.1"
+    source: "CSV"
+
+# Test 3: Application stuck Progressing — hard refresh needed
+- name: stuck_progressing_hard_refresh
+  query: |
+    Application frontend in namespace openshift-gitops has been Progressing for 20 minutes. Fix it.
+
+    The following is the output of `oc -n openshift-gitops get applications.argoproj.io frontend -o yaml`:
+
+    ```yaml
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: frontend
+      namespace: openshift-gitops
+    status:
+      sync:
+        status: Synced
+      health:
+        status: Progressing
+      operationState:
+        phase: Running
+        startedAt: "2026-10-30T14:00:00Z"
+      resources:
+        - group: apps
+          kind: Deployment
           name: frontend
-          namespace: openshift-gitops
-        status:
-          sync:
-            status: Synced
+          namespace: frontend
           health:
             status: Progressing
-          operationState:
-            phase: Running
-            startedAt: "2026-10-30T14:00:00Z"
-          resources:
-            - group: apps
-              kind: Deployment
-              name: frontend
-              namespace: frontend
-              health:
-                status: Progressing
-              status: Synced
-    - command: "oc -n frontend get pods -l app=frontend"
-      output: |
-        NAME                        READY   STATUS    RESTARTS   AGE
-        frontend-5d4f8b7c9-abc12    1/1     Running   0          25m
-        frontend-5d4f8b7c9-def34    1/1     Running   0          25m
-  expected_output:
-    contains:
-      - "Progressing"
-      - "hard refresh"
-      - "annotate"
-      - "argocd.argoproj.io/refresh"
-    remediation_proposed: true
+          status: Synced
+    ```
 
-- id: progressive-sync-stuck
-  description: "ApplicationSet progressive sync stuck due to missing flag"
-  prompt: "My ApplicationSet rollout-wave is not progressing past the first wave. Apps in wave 2 are not syncing."
-  mock_commands:
-    - command: "oc -n openshift-gitops get applicationsets.argoproj.io rollout-wave -o yaml"
-      output: |
-        apiVersion: argoproj.io/v1alpha1
-        kind: ApplicationSet
-        metadata:
-          name: rollout-wave
-          namespace: openshift-gitops
-        spec:
-          strategy:
-            type: RollingSync
-            rollingSync:
-              steps:
-                - matchExpressions:
-                    - key: wave
-                      operator: In
-                      values: ["1"]
-                - matchExpressions:
-                    - key: wave
-                      operator: In
-                      values: ["2"]
-          generators:
-            - list:
-                elements:
-                  - cluster: dev
-                    wave: "1"
-                  - cluster: staging
-                    wave: "2"
-    - command: "oc -n openshift-gitops get applications.argoproj.io -l argocd.argoproj.io/application-set-name=rollout-wave -o wide"
-      output: |
-        NAME              SYNC STATUS   HEALTH STATUS   PROJECT
-        rollout-wave-dev  Synced        Healthy         default
-        rollout-wave-stg  OutOfSync     Missing         default
-    - command: "oc -n openshift-gitops get argocd openshift-gitops -o yaml"
-      output: |
-        spec:
-          controller:
-            env: []
-  expected_output:
-    contains:
-      - "progressive"
-      - "enable-progressive-syncs"
-      - "controller"
+    The following is the output of `oc -n frontend get pods -l app=frontend`:
 
-- id: controller-crashloop
-  description: "Controller in CrashLoopBackOff, propose restart after log analysis"
-  prompt: "Argo CD applications are not reconciling. Something is wrong with the controller."
-  mock_commands:
-    - command: "oc -n openshift-gitops get pods -l app.kubernetes.io/component=application-controller"
-      output: |
-        NAME                                                  READY   STATUS             RESTARTS      AGE
-        openshift-gitops-application-controller-0             0/1     CrashLoopBackOff   8 (45s ago)   2h
-    - command: "oc -n openshift-gitops logs openshift-gitops-application-controller-0 --tail=30"
-      output: |
-        time="2026-10-30T14:30:00Z" level=info msg="Starting application controller"
-        time="2026-10-30T14:30:02Z" level=error msg="Failed to initialize cache: rpc error: code = ResourceExhausted desc = trying to send message larger than max"
-        time="2026-10-30T14:30:02Z" level=fatal msg="Failed to create application controller: rpc error: code = ResourceExhausted"
-    - command: "oc -n openshift-gitops get events --sort-by=.lastTimestamp --field-selector involvedObject.name=openshift-gitops-application-controller-0"
-      output: |
-        LAST SEEN   TYPE      REASON      OBJECT                                                MESSAGE
-        1m          Warning   BackOff     pod/openshift-gitops-application-controller-0          Back-off restarting failed container
-        5m          Normal    Pulled      pod/openshift-gitops-application-controller-0          Container image pulled
-  expected_output:
-    contains:
-      - "CrashLoopBackOff"
-      - "ResourceExhausted"
-      - "cache"
-      - "ARGOCD_APP_STATE_CACHE_EXPIRATION"
+    ```
+    NAME                        READY   STATUS    RESTARTS   AGE
+    frontend-5d4f8b7c9-abc12    1/1     Running   0          25m
+    frontend-5d4f8b7c9-def34    1/1     Running   0          25m
+    ```
+  schema:
+    type: object
+    properties:
+      health_status:
+        type: string
+        enum: ["Progressing"]
+        description: "The current health status of the application"
+      recommended_action:
+        type: string
+        enum: ["hard_refresh", "hard refresh", "annotate"]
+        description: "The recommended remediation action"
+      annotation_key:
+        type: string
+        enum: ["argocd.argoproj.io/refresh"]
+        description: "The annotation key used for hard refresh"
+      pods_healthy:
+        type: boolean
+        description: "Whether the underlying pods are running and healthy"
+    required: ["health_status", "recommended_action"]
+  expected:
+    health_status: "Progressing"
+    recommended_action: "hard_refresh"
+    pods_healthy: true
+
+# Test 4: Progressive sync stuck — missing --enable-progressive-syncs flag
+- name: progressive_sync_missing_flag
+  query: |
+    My ApplicationSet rollout-wave is not progressing past the first wave. Apps in wave 2 are not syncing.
+
+    The following is the output of `oc -n openshift-gitops get applicationsets.argoproj.io rollout-wave -o yaml`:
+
+    ```yaml
+    apiVersion: argoproj.io/v1alpha1
+    kind: ApplicationSet
+    metadata:
+      name: rollout-wave
+      namespace: openshift-gitops
+    spec:
+      strategy:
+        type: RollingSync
+        rollingSync:
+          steps:
+            - matchExpressions:
+                - key: wave
+                  operator: In
+                  values: ["1"]
+            - matchExpressions:
+                - key: wave
+                  operator: In
+                  values: ["2"]
+      generators:
+        - list:
+            elements:
+              - cluster: dev
+                wave: "1"
+              - cluster: staging
+                wave: "2"
+    ```
+
+    The following is the output of `oc -n openshift-gitops get applications.argoproj.io -l argocd.argoproj.io/application-set-name=rollout-wave -o wide`:
+
+    ```
+    NAME              SYNC STATUS   HEALTH STATUS   PROJECT
+    rollout-wave-dev  Synced        Healthy         default
+    rollout-wave-stg  OutOfSync     Missing         default
+    ```
+
+    The following is the output of `oc get deploy -n openshift-gitops -l app.kubernetes.io/name=argocd-applicationset-controller -o jsonpath='{.items[*].spec.template.spec.containers[0].command}'`:
+
+    ```
+    [entrypoint argocd-applicationset-controller]
+    ```
+
+    No `--enable-progressive-syncs` flag is present in the applicationset-controller command args.
+  schema:
+    type: object
+    properties:
+      root_cause:
+        type: string
+        enum: ["missing_flag", "enable-progressive-syncs", "progressive_syncs_disabled"]
+        description: "The root cause — the --enable-progressive-syncs flag is missing"
+      affected_controller:
+        type: string
+        enum: ["applicationset-controller", "argocd-applicationset-controller", "applicationset"]
+        description: "The controller that needs the flag"
+      fix_location:
+        type: string
+        enum: ["ArgoCD CR", "spec.applicationSet.extraCommandArgs", "ArgoCD custom resource"]
+        description: "Where to apply the fix — the ArgoCD CR, not a direct Deployment edit"
+    required: ["root_cause", "affected_controller", "fix_location"]
+  expected:
+    root_cause: "missing_flag"
+    affected_controller: "applicationset-controller"
+    fix_location: "spec.applicationSet.extraCommandArgs"
+
+# Test 5: Controller CrashLoopBackOff — gRPC max message size
+- name: controller_crashloop_grpc_size
+  query: |
+    Argo CD applications are not reconciling. The controller seems to be crashing.
+
+    The following is the output of `oc -n openshift-gitops get pods -l app.kubernetes.io/component=application-controller`:
+
+    ```
+    NAME                                                  READY   STATUS             RESTARTS      AGE
+    openshift-gitops-application-controller-0             0/1     CrashLoopBackOff   8 (45s ago)   2h
+    ```
+
+    The following is the output of `oc -n openshift-gitops logs openshift-gitops-application-controller-0 --tail=30`:
+
+    ```
+    time="2026-10-30T14:30:00Z" level=info msg="Starting application controller"
+    time="2026-10-30T14:30:02Z" level=error msg="Failed to initialize cache: rpc error: code = ResourceExhausted desc = trying to send message larger than max"
+    time="2026-10-30T14:30:02Z" level=fatal msg="Failed to create application controller: rpc error: code = ResourceExhausted"
+    ```
+
+    The following is the output of `oc -n openshift-gitops get events --sort-by=.lastTimestamp --field-selector involvedObject.name=openshift-gitops-application-controller-0`:
+
+    ```
+    LAST SEEN   TYPE      REASON      OBJECT                                                MESSAGE
+    1m          Warning   BackOff     pod/openshift-gitops-application-controller-0          Back-off restarting failed container
+    5m          Normal    Pulled      pod/openshift-gitops-application-controller-0          Container image pulled
+    ```
+  schema:
+    type: object
+    properties:
+      pod_status:
+        type: string
+        enum: ["CrashLoopBackOff"]
+        description: "The current pod status"
+      error_type:
+        type: string
+        enum: ["ResourceExhausted", "gRPC", "grpc_max_size"]
+        description: "The type of error causing the crash"
+      fix_env_var:
+        type: string
+        enum: ["ARGOCD_GRPC_MAX_SIZE_MB"]
+        description: "The environment variable to set for increasing gRPC message size limit"
+      fix_component:
+        type: string
+        enum: ["repo-server", "argocd-repo-server"]
+        description: "The component where the env var should be set"
+    required: ["pod_status", "error_type", "fix_env_var"]
+  expected:
+    pod_status: "CrashLoopBackOff"
+    error_type: "ResourceExhausted"
+    fix_env_var: "ARGOCD_GRPC_MAX_SIZE_MB"

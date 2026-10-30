@@ -9,7 +9,7 @@ description: >
   used when available. Argo Workflows and Argo Events are out of scope. Use when users
   report failing, stuck, or degraded Argo CD or Rollouts resources on a cluster.
 license: MIT
-compatibility: Requires oc (OpenShift CLI). argocd CLI is NOT expected to be available in the sandbox environment.
+compatibility: Requires oc or kubectl. argocd CLI is NOT expected to be available in the sandbox environment.
 ---
 
 # Argo Cluster Debug
@@ -45,6 +45,10 @@ echo "Platform: $PLATFORM — using '$KCTL'"
 $KCTL get argocd -A --no-headers 2>/dev/null || \
   $KCTL get pods -A -l app.kubernetes.io/part-of=argocd --no-headers 2>/dev/null | awk '{print $1}' | sort -u
 NS=openshift-gitops      # set to the instance you are working on; every command below uses $NS
+
+# Resolve the ArgoCD CR name — used in StatefulSet/Deployment naming (e.g. ${CR_NAME}-application-controller)
+CR_NAME=$($KCTL -n "$NS" get argocd -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+CR_NAME=${CR_NAME:-"openshift-gitops"}
 ```
 
 Every `kubectl` in the workflows below means `$KCTL`. `oc` accepts all of them verbatim,
@@ -208,13 +212,16 @@ HIGH    — Raise argocd-server memory to 1Gi (OOMKilling at the 256Mi default)
 Where a cluster is reachable, compute it rather than guess:
 
 ```bash
-<repo-root>/scripts/blast-radius.sh <kind> <name> [namespace]
+<repo-root>/gitops/scripts/blast-radius.sh <kind> <name> [namespace]
 ```
 
-It resolves the fan-out for `ArgoCD`, `AppProject`, `ApplicationSet`, `Application`,
-`RolloutManager` and the shared ConfigMaps, and is strictly read-only. With no cluster,
-reason it out from the manifests and **say it was not verified** — an unverified impact
-is still far more useful than none.
+It handles `ArgoCD`, `AppProject`, `ApplicationSet`, `Application`, `RolloutManager` and
+the shared ConfigMaps, and is strictly read-only. Exit codes: `0` resolved (or nothing
+affected), `2` usage, `3` no cluster reachable, `4` a lookup failed — so the radius is
+*UNKNOWN rather than zero*. Never read a `4` as "nothing is affected".
+
+With no cluster, reason it out from the manifests and **say it was not verified** — an
+unverified impact is still far more useful than none.
 
 "Impact: this Application only, nothing else references it" is a good answer. Say it
 rather than omitting the line; silence reads as "unknown", which is a different claim.
@@ -320,8 +327,11 @@ a substitute read as the user's resource.
 
 **Action (after user approval):**
 ```bash
+# Omit revision — let Argo CD use the Application's spec.source.targetRevision.
+# Sending "revision":"HEAD" would override a pinned tag or branch, silently
+# deploying the default branch tip instead.
 $KCTL -n $NS patch applications.argoproj.io $APP --type=merge \
-  -p '{"operation":{"sync":{"revision":"HEAD","prune":false}}}'
+  -p '{"operation":{"sync":{"prune":false}}}'
 ```
 
 **Verify:**
@@ -333,7 +343,7 @@ $KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.status.sync.status
 ### Force Hard Refresh
 
 **When:** Application stuck in Progressing >10 minutes with no pod failures, or stale cache suspected
-**Evidence required:** `.status.sync.status` is not progressing, pods are healthy
+**Evidence required:** `.status.health.status` equals "Progressing" (NOT `.status.sync.status` — that field is Synced/OutOfSync/Unknown and never shows Progressing), pods are healthy
 
 **Action (after user approval):**
 ```bash
@@ -342,7 +352,11 @@ $KCTL -n $NS annotate applications.argoproj.io $APP argocd.argoproj.io/refresh=h
 
 **Verify:**
 ```bash
-$KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.status.sync.status}'
+# Check that the refresh annotation was consumed (no longer present) and
+# that reconciledAt has been updated, indicating a fresh reconciliation.
+$KCTL -n $NS get applications.argoproj.io $APP \
+  -o jsonpath='reconciledAt={.status.reconciledAt} refresh={.metadata.annotations.argocd\.argoproj\.io/refresh}'
+# Expected: reconciledAt=<recent-timestamp> refresh=  (annotation consumed)
 ```
 
 ### Restart Argo CD Controller
@@ -352,6 +366,10 @@ $KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.status.sync.status
 
 **Action (after user approval):**
 ```bash
+# Resolve the ArgoCD CR name first (used in StatefulSet naming):
+CR_NAME=$($KCTL -n "$NS" get argocd -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+CR_NAME=${CR_NAME:-"openshift-gitops"}
+
 # For operator-managed installs:
 $KCTL -n $NS rollout restart statefulset/${CR_NAME}-application-controller
 # Verify:
@@ -365,29 +383,53 @@ $KCTL -n $NS rollout status statefulset/${CR_NAME}-application-controller --time
 
 **Action (after user approval):**
 ```bash
-# 1. Identify the service account
-SA=$($KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.spec.syncPolicy.syncOptions}' | grep -o 'ServiceAccount=[^ ]*' | cut -d= -f2)
-SA=${SA:-"${CR_NAME}-argocd-application-controller"}
+# 1. Parse the SyncError condition message — it contains all needed info:
+# "deployments.apps is forbidden: User \"system:serviceaccount:openshift-gitops:argocd-app-controller\"
+#  cannot create resource \"deployments\" in API group \"apps\" in the namespace \"payment\""
+ERROR_MSG=$($KCTL -n $NS get applications.argoproj.io $APP \
+  -o jsonpath='{.status.conditions[?(@.type=="SyncError")].message}')
 
-# 2. Show what's missing
-echo "Missing permission: <verb> <resource> in <namespace>"
-echo "Service account: $SA"
-echo "Suggested fix: Create a RoleBinding granting the needed permission"
+# 2. Extract the service account (from "system:serviceaccount:<ns>:<name>")
+SA_FULL=$(echo "$ERROR_MSG" | grep -oP 'system:serviceaccount:\K[^"]+')
+SA_NS=$(echo "$SA_FULL" | cut -d: -f1)
+SA_NAME=$(echo "$SA_FULL" | cut -d: -f2)
 
-# 3. Generate the RoleBinding (user reviews before applying)
+# 3. Extract verb, resource, apiGroup, and destination namespace
+VERB=$(echo "$ERROR_MSG" | grep -oP 'cannot \K\w+')
+RESOURCE=$(echo "$ERROR_MSG" | grep -oP 'resource "\K[^"]+')
+API_GROUP=$(echo "$ERROR_MSG" | grep -oP 'API group "\K[^"]+')
+DEST_NS=$(echo "$ERROR_MSG" | grep -oP 'in the namespace "\K[^"]+')
+
+echo "Missing permission: $VERB $RESOURCE (API group: $API_GROUP) in namespace $DEST_NS"
+echo "Service account: $SA_NAME (namespace: $SA_NS)"
+echo "Suggested fix: Create a Role + RoleBinding in the destination namespace"
+
+# 4. Generate a least-privilege Role + RoleBinding in the destination namespace
+#    (user reviews before applying)
 cat <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: Role
 metadata:
-  name: argocd-${APP}-fix
+  name: argocd-${APP}-sync
+  namespace: ${DEST_NS}
+rules:
+- apiGroups: ["${API_GROUP}"]
+  resources: ["${RESOURCE}"]
+  verbs: ["${VERB}"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-${APP}-sync
+  namespace: ${DEST_NS}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: <appropriate-role>
+  kind: Role
+  name: argocd-${APP}-sync
 subjects:
 - kind: ServiceAccount
-  name: $SA
-  namespace: $NS
+  name: ${SA_NAME}
+  namespace: ${SA_NS}
 EOF
 ```
 
@@ -398,11 +440,22 @@ EOF
 
 **Action (after user approval):**
 ```bash
-$KCTL -n $NS patch applications.argoproj.io $APP --type=json \
-  -p '[{"op":"remove","path":"/status/operationState"}]' --subresource=status
+# Argo CD terminates a sync by clearing `.operation` (top-level), NOT
+# `.status.operationState`. The Application CRD has no status subresource,
+# so --subresource=status would fail. Guard the absent-path case to avoid 422.
+if $KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.operation}' 2>/dev/null | grep -q .; then
+  $KCTL -n $NS patch applications.argoproj.io $APP --type=json \
+    -p '[{"op":"remove","path":"/operation"}]'
+else
+  echo "No .operation field present — sync is not in progress"
+fi
 ```
 
-**Verify:** Check that a fresh sync can be triggered.
+**Verify:** Check that `.operation` is absent and a fresh sync can be triggered.
+```bash
+$KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.operation}'
+# Expected: empty (no output)
+```
 
 ## Argo CRD Reference
 

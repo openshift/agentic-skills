@@ -158,10 +158,10 @@ Three cases are not additive, and each needs its impact stated:
 - **Editing an existing `AppProject`** rather than creating one. Tightening `sourceRepos`,
   `destinations` or the resource whitelists can push Applications already in that project
   to `InvalidSpecError` — they stop syncing with nobody touching them.
-  `<repo-root>/scripts/blast-radius.sh AppProject <name> <namespace>` lists them.
+  `<repo-root>/gitops/scripts/blast-radius.sh AppProject <name> <namespace>` lists them.
 - **Attaching a tenant to a shared instance** via `NamespaceManagement` or
   `sourceNamespaces`. Name the instance and who else is already on it:
-  `<repo-root>/scripts/blast-radius.sh ArgoCD <name> <namespace>`.
+  `<repo-root>/gitops/scripts/blast-radius.sh ArgoCD <name> <namespace>`.
 - **An ApplicationSet whose generator will now match more tenants.** It creates
   Applications on merge; a narrowed generator can prune existing ones and delete their
   workloads unless `preserveResourcesOnDeletion` is set.
