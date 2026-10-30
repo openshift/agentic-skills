@@ -4,11 +4,12 @@ description: >
   Debug and troubleshoot Red Hat OpenShift GitOps on live clusters — inspects Argo CD
   Application sync status, health checks, and controller logs; diagnoses Argo Rollouts
   canary/blue-green failures and AnalysisRun results; and handles multi-instance,
-  operator-managed installs. Prefers argocd/oc CLIs when available, falls back to kubectl
-  for CRD inspection. Argo Workflows and Argo Events are out of scope. Use when users
+  operator-managed installs. Uses oc (OpenShift CLI) for all CRD inspection; falls back
+  to kubectl when oc is unavailable. argocd CLI is NOT expected in the sandbox but is
+  used when available. Argo Workflows and Argo Events are out of scope. Use when users
   report failing, stuck, or degraded Argo CD or Rollouts resources on a cluster.
 license: MIT
-compatibility: Requires kubectl; optionally argocd, argo (workflows CLI), kubectl-argo-rollouts
+compatibility: Requires oc (OpenShift CLI). argocd CLI is NOT expected to be available in the sandbox environment.
 ---
 
 # Argo Cluster Debug
@@ -20,7 +21,7 @@ Debug and troubleshoot the full Argo ecosystem on live Kubernetes clusters.
 | Tool | Required | Purpose |
 |------|----------|---------|
 | `kubectl` **or** `oc` | Yes | CRD inspection, pod logs, resource status |
-| argocd | No | Richer Application output, diff, sync operations |
+| argocd | No | Richer Application output, diff, sync operations (NOT available in agentic sandbox; all operations use oc against CRDs) |
 | kubectl-argo-rollouts | No | Rollout status, step details, promotion |
 
 **Resolve the CLI before any workflow. On OpenShift, `oc` is the default.**
@@ -63,13 +64,13 @@ traces the problem from surface symptoms to root cause. The value is in the comp
 of the investigation, not just finding the first error.
 
 **Before starting any workflow:**
-1. Check which CLIs are available (argocd, argo, kubectl-argo-rollouts, kubectl)
+1. Check which CLIs are available (oc is the default; argocd and kubectl-argo-rollouts are optional and NOT expected in the sandbox)
 2. Confirm the current cluster context
 3. Pick the matching workflow from the table below and load `references/debug-workflows.md`
 4. Load `references/troubleshooting.md` — it maps symptoms to causes and saves time
 
 **General rules:**
-- Prefer specialized CLIs when available (richer output), fall back to `kubectl get -o yaml`
+- Use `oc` as the primary CLI; fall back to `kubectl get -o yaml` if `oc` is unavailable. Use argocd CLI only when explicitly available (not expected in sandbox)
 - Read-only by default — never sync, promote, or delete unless explicitly asked
 - Analyze `.status.conditions` as the primary diagnostic signal for every Argo CRD
 - Complete the full workflow — don't stop after finding one issue, cascading problems are common
@@ -306,6 +307,102 @@ An empty result from a bare short name is not evidence of absence.
 **Then report it as a finding, not a failure.** State what you searched and what exists.
 If you demonstrate the method on a different resource, say so in the heading — never let
 a substitute read as the user's resource.
+
+## Remediation Actions
+
+> **Important:** All write operations require explicit user approval before execution.
+> Follow the pattern: diagnose → show evidence → propose fix → get user approval → apply → verify.
+
+### Retry Failed Sync
+
+**When:** SyncError identified as transient (network timeout, temporary API unavailability)
+**Evidence required:** `.status.conditions` shows SyncError with transient message
+
+**Action (after user approval):**
+```bash
+$KCTL -n $NS patch applications.argoproj.io $APP --type=merge \
+  -p '{"operation":{"sync":{"revision":"HEAD","prune":false}}}'
+```
+
+**Verify:**
+```bash
+$KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.status.sync.status}'
+# Expected: Synced
+```
+
+### Force Hard Refresh
+
+**When:** Application stuck in Progressing >10 minutes with no pod failures, or stale cache suspected
+**Evidence required:** `.status.sync.status` is not progressing, pods are healthy
+
+**Action (after user approval):**
+```bash
+$KCTL -n $NS annotate applications.argoproj.io $APP argocd.argoproj.io/refresh=hard --overwrite
+```
+
+**Verify:**
+```bash
+$KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.status.sync.status}'
+```
+
+### Restart Argo CD Controller
+
+**When:** Controller logs show repeated OOM kills, rpc errors, stale cache, or excessive resource consumption
+**Evidence required:** Pod logs or events showing OOM/CrashLoopBackOff, or controller not reconciling
+
+**Action (after user approval):**
+```bash
+# For operator-managed installs:
+$KCTL -n $NS rollout restart statefulset/${CR_NAME}-application-controller
+# Verify:
+$KCTL -n $NS rollout status statefulset/${CR_NAME}-application-controller --timeout=120s
+```
+
+### Fix Missing RBAC
+
+**When:** SyncError contains "is forbidden" or "cannot create/patch/delete resource"
+**Evidence required:** Specific error message identifying the missing permission
+
+**Action (after user approval):**
+```bash
+# 1. Identify the service account
+SA=$($KCTL -n $NS get applications.argoproj.io $APP -o jsonpath='{.spec.syncPolicy.syncOptions}' | grep -o 'ServiceAccount=[^ ]*' | cut -d= -f2)
+SA=${SA:-"${CR_NAME}-argocd-application-controller"}
+
+# 2. Show what's missing
+echo "Missing permission: <verb> <resource> in <namespace>"
+echo "Service account: $SA"
+echo "Suggested fix: Create a RoleBinding granting the needed permission"
+
+# 3. Generate the RoleBinding (user reviews before applying)
+cat <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-${APP}-fix
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: <appropriate-role>
+subjects:
+- kind: ServiceAccount
+  name: $SA
+  namespace: $NS
+EOF
+```
+
+### Terminate Stuck Sync Operation
+
+**When:** Application has a stuck in-progress sync operation that won't complete
+**Evidence required:** `.status.operationState.phase` is "Running" for extended period
+
+**Action (after user approval):**
+```bash
+$KCTL -n $NS patch applications.argoproj.io $APP --type=json \
+  -p '[{"op":"remove","path":"/status/operationState"}]' --subresource=status
+```
+
+**Verify:** Check that a fresh sync can be triggered.
 
 ## Argo CRD Reference
 
