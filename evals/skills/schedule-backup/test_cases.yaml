@@ -1,0 +1,36 @@
+- name: schedule_default_immediate_behavior
+  query: "The user asks for daily recurring backups and does not request one now. Should the schedule skill trigger an immediate backup at creation?"
+  schema:
+    type: object
+    properties:
+      run_immediately:
+        type: boolean
+        description: "Whether the skill's default should start an immediate backup."
+    required: [run_immediately]
+  expected:
+    run_immediately: false
+
+- name: schedule_phase_interpretation
+  query: "A new Schedule has phase Enabled but last_backup is null. Can the agent claim that the application already has a successful backup from this schedule?"
+  schema:
+    type: object
+    properties:
+      backup_verified:
+        type: boolean
+        description: "Whether a generated Backup has been verified."
+    required: [backup_verified]
+  expected:
+    backup_verified: false
+
+- name: schedule_select_verifier
+  query: "Which script checks that an OADP Schedule reached Enabled or reports FailedValidation?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["create_schedule.py", "verify_schedule.py", "health_check.py"]
+        description: "Use the schedule-backup skill."
+    required: [script]
+  expected:
+    script: "verify_schedule.py"
