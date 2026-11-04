@@ -86,7 +86,7 @@ components every Application on the instance depends on.
 **Compute it, then show the user the result before asking to confirm:**
 
 ```bash
-<repo-root>/scripts/blast-radius.sh <kind> <name> [namespace]
+<repo-root>/gitops/scripts/blast-radius.sh <kind> <name> [namespace]
 ```
 
 It handles `ArgoCD`, `AppProject`, `ApplicationSet`, `Application`, `RolloutManager` and
