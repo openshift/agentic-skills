@@ -1,6 +1,6 @@
 ---
 name: cluster-update-advisor
-description: Assess OpenShift cluster update (upgrade) readiness and risk, and produce a concrete remediation plan when the upgrade is feasible. Use when evaluating whether a cluster is safe to update, when an update is available, or when the user asks about update risks, prerequisites, blockers, or best practices.
+description: Assess OpenShift cluster update (upgrade) readiness and risk, and produce a concrete remediation plan when the update is feasible. Use when evaluating whether a cluster is safe to update, when an update is available, or when the user asks about update risks, prerequisites, blockers, or best practices.
 license: Apache-2.0
 ---
 
@@ -42,14 +42,16 @@ with `_status: error` is a gap in visibility — note it; it lowers confidence.
 
 Output must conform to the `RemediationOption` schema enforced by the OlsAgent CR's
 `outputSchema` field; the operator handles structured-output compliance. Plan actions are
-typed `pre-check`, `mutation`, `wait`, or `post-check`, and appear in that order.
+typed `pre-check`, `mutation`, `wait`, or `post-check`, and appear in that order, with 
+long running verification commands beyond starting cluster update to be included in the 
+`verification` field of the `RemediationOption`.
 When the update cannot proceed, structure the `RemediationOption` to include the
 causes in within the RemediationOption. If any single cause is blocking the cluster
 update, also assess if a cluster update ignoring that factor is possible as a viable
 path, generating a `RemediationOption`. In such cases also include a plan blocked on user
-upgrade instructing user on steps to take or what conditions need to be met or waited for
+update instructing user on steps to take or what conditions need to be met or waited for
 in order to perform a safe cluster update. If a plan makes destructive changes to a cluster,
-include steps to restore any removed components or backed up data if appropriate.
+include steps to restore any removed components or backed up data if appropriate. 
 
 ## Assess update readiness
 
@@ -75,46 +77,34 @@ and detail data:
 | etcd health | Any member unhealthy | No recent backup (within 24h) |
 | Network plugin | SDN in use and target requires OVN (4.17+) | Using deprecated SDN (< 4.17) |
 | CRD compatibility | Stored version not served; operator maxOpenShiftVersion < target | Deprecated versions still served |
-| OLM operator lifecycle | Installed operator incompatible with target OCP; operator product EOL | Operator has pending update; operator product in Maintenance Support |
+| OLM operator lifecycle | Installed operator incompatible with target OCP | Operator has pending update; operator product in EOL or Maintenance Support |
 
 For checks not listed: blocker if the issue would cause data loss, a performance
 regression, or a failed update; warning if it would cause temporary disruption or a slow
 update.
 
-### Decide
-
-| Blockers | Warnings | Decision |
-|---|---|---|
-| Unable to assess | any | `escalate` — insufficient data for a confident assessment |
-| 1+ | any | `block` — findings must be resolved before updating |
-| 0 | 1+ | `warn` — findings exist but are manageable with prerequisites |
-| 0 | 0 | `recommend` — all checks pass within acceptable thresholds |
-
-Report the decision with the evidence behind it. **If the decision is `escalate`, or
-`block` with no viable remediation, stop here** — explain why in the diagnosis and
-produce no plan.
-
-## Build the remediation plan
-
-Proceed only when the update is feasible: the decision is `recommend`, `warn`, or `block`
-with actionable remediation. Produce a single `RemediationOption`.
-
 ### Determine if any operators need upgrading
 
 `.checks.olm_operator_lifecycle.operators[]` tells you **what is installed and how it is
 managed** — `name`, `package`, `namespace`, `channel`, `available_channels`,
-`installed_version`, `installed_csv`, `install_plan_approval`, `state`. Use it to feed
-`olm-check` and to name resources in commands. It does **not** decide what needs
+`installed_version`, `installed_csv`, `install_plan_approval`, `state`. Use it in the 
+`product-lifecycle` skill as needed and to name resources in commands. It does **not** decide what needs
 upgrading: `summary.incompatible_with_target` is a hint that work is likely needed, not a
-per-operator verdict, and `available_channels` lists what exists rather than what is
-compatible.
+per-operator verdict, and `available_channels` lists what exists for OLMv0 operators 
+rather than what is compatible. For operators either missing lifecycle data or marked incompatible
+use the `product-lifecycle` skill should be the source of truth.
 
 **Split by OLM API type.** An entry with `installed_csv` or `install_plan_approval` is
 OLMv0 (Subscription-managed); everything else is OLMv1 (ClusterExtension). Build one JSON
 array per type from `package` and `installed_version`.
 
-When using the `olm-check` skill call it **once** for the whole cluster, with the target OCP as **major.minor**
+When using the `product-lifecycle` skill call it **once** for the whole cluster, with the target OCP as **major.minor**
 (`4.21`, not `4.21.8`) and always `--compatibleonly`
+
+Lifecycle data in the output is purely informational, do not use it to disqualify an otherwise valid update if
+no other update is available. Operators may be installed past their `End of life` date if compatible with 
+target ocp version and an alternative is unavailable. Management of Operators without data in the PLC api is 
+orthogonal to the cluster update, missing PLC data should be reported as a warning.
 
 Decide per operator from its entry in `results` — never from a version number, a channel
 name, or the mere existence of a newer release:
@@ -126,10 +116,36 @@ name, or the mere existence of a newer release:
 | `ocp_compatible: false` + non-empty `available_versions` (OLMv1) | Upgrade — plan the version-range bump. |
 | `ocp_compatible: false`, no reachable version | **Blocker.** No upgrade fixes the incompatibility; report it and produce no plan. |
 | `ocp_compatible: null` | **Unknown** — PLC tracks no compatibility for that version. Report as a warning and leave the operator alone. |
-| `error` set (listed in `lifecycle_unavailable`), or top-level `packagemanifest_error` | **Unknown** — the update should not proceed. Name the operators and the reason in the remediation option. |
+| `error` set (listed in `lifecycle_unavailable`), or top-level `packagemanifest_error` | **Unknown** — Name the operators and the reason in the remediation option. |
 
 `ocp_compatible: false` with a reachable upgrade is the **only** trigger for an operator
-upgrade; those operators are the only ones that get commands in the plan.
+upgrade; those operators are the only ones that get commands in the plan. If an installed incompatible
+operator can be addressed with an update, do not consider the operator a blocker. Currently installed
+operator versions being incompatible with current or target OCP is not a blocker **if and only if** the
+operator can be updated to a version compatible with the **target OCP** version - cluster updates not
+meeting this precondition are **invalid**.
+
+### Decide
+
+| Blockers | Warnings | Decision |
+|---|---|---|
+| Unable to assess | any | `escalate` — insufficient data for a confident assessment |
+| 1+ | any | `block` — findings must be resolved before updating |
+| 0 | 1+ | `warn` — findings exist but are manageable with prerequisites |
+| 0 | 0 | `recommend` — all checks pass within acceptable thresholds |
+
+Do not include findings that can be fixed without user input such as incompatible
+operators or configuration that can be fixed with an update or minor configuration
+change as blockers.
+Report the decision with the evidence behind it. **If the decision is `escalate`, or
+`block` with no viable remediation, stop here** — explain why in the diagnosis and
+produce no plan. **Only** do this if no alternate plan is possible. **Do not generate
+remediation plans to other target OCP versions** than the one specified.
+
+## Build the remediation plan
+
+Proceed only when the update is feasible: the decision is `recommend`, `warn`, or `block`
+with actionable remediation. Produce a single `RemediationOption`.
 
 ### Commands
 
@@ -149,7 +165,11 @@ Validate before any mutation — never skip this phase:
 - No critical operator is degraded
 - Target version exists in available or conditional updates
 
-#### OLMv0 operator upgrade (Subscription / InstallPlan)
+#### OLMv0 operator update (Subscription / InstallPlan)
+
+RBAC required:
+- patch on subscriptions.operators.coreos.com and installplans.operators.coreos.com
+- delete on installplans.operators.coreos.com
 
 Each `source_catalogs` entry gives a `catalog`, a `catalog_namespace`, and a `versions`
 map of full SemVer → `{channels, bundle}`. From the chosen version's entry:
@@ -160,15 +180,16 @@ map of full SemVer → `{channels, bundle}`. From the chosen version's entry:
 2. Take the catalog and the channel from the **same** `source_catalogs` entry.
 3. If several channels carry the chosen version, prefer `stable` over `fast`, `candidate`
    or `preview`; among version-scoped channels (`stable-6.5`) prefer the one pinned to the
-   chosen version's minor over a floating one, so the upgrade lands on the intended version.
+   chosen version's minor over a floating one, so the update lands on the intended version.
 4. Do **not** set `spec.startingCSV` — it applies at install time only and is ignored on
-   upgrade. Use the `bundle` value for verification and in the action description instead.
+   update. Use the `bundle` value for verification and in the action description instead.
+5. Never synthesize a CSV name or bundle name from the package, version, or channel name.
+   The only valid CSV name is the `bundle` value.
 
 If the subscription is already on the right catalog, patch the channel alone (and skip
 the patch entirely if the channel already matches):
 
 ```bash
-# Requires: patch on subscriptions.operators.coreos.com
 oc patch subscriptions.operators.coreos.com ${SUBSCRIPTION_NAME} -n ${NAMESPACE} --type=merge -p '{"spec":{"channel":"${TARGET_CHANNEL}"}}'
 ```
 
@@ -179,33 +200,45 @@ channel in one operation so the subscription is never left inconsistent:
 oc patch subscriptions.operators.coreos.com ${SUBSCRIPTION_NAME} -n ${NAMESPACE} --type=merge -p '{"spec":{"channel":"${TARGET_CHANNEL}","source":"${CATALOG}","sourceNamespace":"${CATALOG_NAMESPACE}"}}'
 ```
 
-Then wait for the InstallPlan, approve it when `install_plan_approval` is `Manual` (omit
-the approve step for `Automatic`, keep the waits), and verify. `${INSTALLPLAN_NAME}` comes
+Then wait for the InstallPlan, approve it when `install_plan_approval` is `Manual` for any InstallPlan in the namespace (omit
+the approve step if all InstallPlans have `Automatic` approval, keep the waits), and verify. This may require deleting an 
+existing InstallPlan if the subscription already has one in `RequiresApproval` status. `${INSTALLPLAN_NAME}` comes
 from the subscription's `.status.installplan.name` *after* the channel patch:
 
 ```bash
 # Wait for the subscription to generate an InstallPlan
 oc wait subscriptions.operators.coreos.com ${SUBSCRIPTION_NAME} -n ${NAMESPACE} --for=jsonpath='{.status.installplan.name}' --timeout=60s
 
-# Manual approval only
+# Required only if an InstallPlan in the namespace has manual approval
+# Ensure the InstallPlan is the correct one before approving
 oc patch installplans.operators.coreos.com ${INSTALLPLAN_NAME} -n ${NAMESPACE} --type=merge -p '{"spec":{"approved":true}}'
 
-# Wait for the operator upgrade to complete, then confirm the expected bundle is installed
+# Wait for the operator update to complete, then confirm the expected bundle is installed
 oc wait installplans.operators.coreos.com ${INSTALLPLAN_NAME} -n ${NAMESPACE} --for='jsonpath={.status.phase}=Complete' --timeout=300s
 oc get subscriptions.operators.coreos.com ${SUBSCRIPTION_NAME} -n ${NAMESPACE} -o jsonpath='{.status.installedCSV}'
 ```
 
-#### OLMv1 operator upgrade (ClusterExtension)
+** Wait on the InstallPlan phase only.**:
+A compatible verision on a channel only means it may be reached. Depending on the OLMv1 catalog source itself, a specific
+operator version may be skipped in favor of a later version in the channel, or only be reachable through a multiple operator updates.
+If installPlan approcal is `Automatic`, this update proceeds till at the head of the channel. If `Manual`, each step of the update
+will need an installPlan approval. Do not have strict checks or waits on specific values of `.status.installedCSV` or 
+`.status.currentCSV`, these are unreliable.
+
+#### OLMv1 operator update (ClusterExtension)
+
+RBAC required:
+- patch on clusterextensions.olm.operatorframework.io
 
 Set a version range derived from `available_versions`, excluding every incompatible
 version; OLMv1 resolves to the newest version in range. If the only version `olm-check`
 returns is the installed one, do not patch the ClusterExtension.
 
 ```bash
-# Requires: patch on clusterextensions.olm.operatorframework.io
+# Patch the clusterextension to include the expected version in its version range
 oc patch clusterextensions.olm.operatorframework.io ${EXTENSION_NAME} --type=merge -p '{"spec":{"source":{"catalog":{"version":"${VERSION_RANGE}"}}}}'
 
-# Wait for the upgrade, then confirm the resolved version is inside the compatible range
+# Wait for the update, then confirm the resolved version is inside the compatible range
 oc wait clusterextensions.olm.operatorframework.io ${EXTENSION_NAME} --for=condition=Installed=True --timeout=300s
 oc get clusterextensions.olm.operatorframework.io ${EXTENSION_NAME} -o jsonpath='{.status.install.bundle.version}'
 ```
@@ -224,19 +257,20 @@ oc adm upgrade --to=${TARGET_VERSION}
 Verify the update has started:
 
 ```bash
-oc get -o jsonpath='{.status.desired.version}' clusterversions.config.openshift.io version
-oc get -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' clusterversions.config.openshift.io version
+oc wait clusterversion/version --for='jsonpath={.status.conditions[?(@.type=="Progressing")].status}=True' --timeout=120s
+oc wait --for=jsonpath='{.status.desired.version}=${TARGET_VERSION}' clusterversions.config.openshift.io version --timeout=10s
 ```
+
+Longer running checks beyond checking for cluster update to start should be done in the `verification` section in the
+`RemediationOption` to avoid execution timeouts. 
 
 ### RBAC
 
 For each `oc` command in the plan, derive the Kubernetes PolicyRule it requires from the
 fully qualified resource name (resource, apiGroup, verbs, and `resourceNames` where
 applicable), and include the complete list in the remediation option. Include permissions
-required for reading and modifying resources as needed. Do not skip RBAC required to `get` or `list`
-resources checked by any command in the plan.
-Ensure there are patch permissions for clusterversions.config.openshift.io for actual cluster upgrade.
-
+required for reading and modifying resources as needed.
+Ensure `patch` permissions for clusterversions.config.openshift.io for actual cluster update.
 
 ## Hard rules
 
@@ -245,7 +279,9 @@ Ensure there are patch permissions for clusterversions.config.openshift.io for a
   as blocked.
 - Never treat missing lifecycle data as compatible. `ocp_compatible: null`, an `error`
   entry, or a `packagemanifest_error` means unknown — report it; do not guess, and do not
-  silently skip the operator.
+  silently skip the operator. A remediation plan may be offered without the operator update
+  but the status of missing lifecycle data must be reported.
 - Never dry-run with `--dry-run=client`; use `--dry-run=server` so validation hits the
   real cluster API.
+- Ensure emitted commands are syntactically correct.
 - If no valid remediation plan can be produced, say so and give the root cause.

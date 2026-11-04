@@ -318,7 +318,6 @@ def cmd_olm_check(args, output=sys.stdout, local_products_json_file=None, local_
                 by_package[pkg_name.strip()].append(p)
 
     results = []
-
     for op in operators:
         pkg = op.get("package", "")
         requested_version = (op.get("version") or "").lstrip("v")
@@ -328,7 +327,6 @@ def cmd_olm_check(args, output=sys.stdout, local_products_json_file=None, local_
             continue
 
         products = by_package.get(pkg)
-
         if not products:
             entry = {"package": pkg, "error": "package not found in PLC API"}
             if requested_version:
@@ -337,7 +335,7 @@ def cmd_olm_check(args, output=sys.stdout, local_products_json_file=None, local_
             continue
 
         if args.compatibleonly:
-            all_versions = {v.get("name") for p in products for v in (p.get("versions") or []) if (v.get("openshift_compatibility") == "N/A" or target in parse_ocp_versions(v.get("openshift_compatibility")))} - {None}
+            all_versions = {v.get("name") for p in products for v in (p.get("versions") or []) if (target in parse_ocp_versions(v.get("openshift_compatibility")))} - {None}
         else:
             all_versions = {v.get("name") for p in products for v in p.get("versions") or []} - {None}
 

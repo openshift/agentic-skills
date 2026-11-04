@@ -32,8 +32,8 @@ python3 product-lifecycle/scripts/plc_lookup.py olm-check --ocp 4.21 --compatibl
 | Flag | Required | Meaning |
 |---|---|---|
 | `--ocp` | yes | Target OCP version, major.minor (`4.21`) |
-| `--olmv0` | one of the two | JSON array of Subscription-managed (OLM classic) operators |
-| `--olmv1` | one of the two | JSON array of ClusterExtension-managed operators |
+| `--olmv0` | one of the two | JSON **array** of Subscription-managed (OLM classic) operators |
+| `--olmv1` | one of the two | JSON **array** of ClusterExtension-managed operators |
 | `--compatibleonly` | no | Restrict output to versions compatible with `--ocp` |
 
 Array entries take `package` (required — the OLM package name, i.e. a Subscription's
