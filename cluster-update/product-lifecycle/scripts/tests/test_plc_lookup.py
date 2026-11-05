@@ -138,9 +138,42 @@ SAMPLE_SKUPPER_WITH_COMPAT = {
 }
 
 
+SAMPLE_PACKAGEMANIFESTS = [
+    {
+        "metadata": {"name": "cluster-logging"},
+        "status": {
+            "catalogSource": "redhat-operators",
+            "catalogSourceNamespace": "openshift-marketplace",
+            "channels": [
+                {
+                    "name": "stable-6.5",
+                    "entries": [
+                        {"name": "cluster-logging.v6.5.1", "version": "6.5.1"},
+                        {"name": "cluster-logging.v6.5.0", "version": "6.5.0"},
+                    ],
+                },
+                {
+                    "name": "stable",
+                    "entries": [{"name": "cluster-logging.v6.5.1", "version": "6.5.1"}],
+                },
+                {
+                    "name": "stable-5.9",
+                    "entries": [{"name": "cluster-logging.v5.9.14", "version": "5.9.14"}],
+                },
+            ],
+        },
+    },
+]
+
+
 def _mock_api_search(data):
     """Return a patcher that makes api_search return the given data."""
     return patch.object(plc_lookup, "api_search", return_value=data)
+
+
+def _mock_packagemanifests(items=SAMPLE_PACKAGEMANIFESTS):
+    """Return a patcher that makes fetch_packagemanifests return the given items."""
+    return patch.object(plc_lookup, "fetch_packagemanifests", return_value=items)
 
 
 
@@ -289,7 +322,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":"cluster-logging","version":"6.5.0"}]',
+                "--olmv1", '[{"package":"cluster-logging","version":"6.5.0"}]',
             ])
         self.assertEqual(output["ocp_target"], "4.21")
         self.assertEqual(output["operators_checked"], 1)
@@ -306,7 +339,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":"cluster-logging","version":"v6.5.0"}]',
+                "--olmv1", '[{"package":"cluster-logging","version":"v6.5.0"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -318,7 +351,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT_DUPLICATE_PKG]):
             output = _run_main([
                 "olm-check", "--ocp", "4.17",
-                "--operators", '[{"package":"skupper-operator","version":"1.8.2"}]',
+                "--olmv1", '[{"package":"skupper-operator","version":"1.8.2"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -330,7 +363,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_SKUPPER_NO_COMPAT, SAMPLE_SKUPPER_WITH_COMPAT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.17",
-                "--operators", '[{"package":"skupper-operator","version":"2.1.0"}]',
+                "--olmv1", '[{"package":"skupper-operator","version":"2.1.0"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -342,7 +375,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_SKUPPER_WITH_COMPAT, SAMPLE_SKUPPER_NO_COMPAT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.17",
-                "--operators", '[{"package":"skupper-operator","version":"2.1.0"}]',
+                "--olmv1", '[{"package":"skupper-operator","version":"2.1.0"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -354,7 +387,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT_DUPLICATE_PKG_2]):
             output = _run_main([
                 "olm-check", "--ocp", "4.17",
-                "--operators", '[{"package":"skupper-operator","version":"1.8.0"}]',
+                "--olmv1", '[{"package":"skupper-operator","version":"1.8.0"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -365,7 +398,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT_DUPLICATE_PKG_2]):
             output = _run_main([
                 "olm-check", "--ocp", "4.17",
-                "--operators", '[{"package":"skupper-operator"}]',
+                "--olmv1", '[{"package":"skupper-operator"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -377,7 +410,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":"cluster-logging"}]',
+                "--olmv1", '[{"package":"cluster-logging"}]',
             ])
         r = output["results"][0]
         self.assertNotIn("error", r)
@@ -390,7 +423,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":"cluster-logging","version":"9.9.0"}]',
+                "--olmv1", '[{"package":"cluster-logging","version":"9.9.0"}]',
             ])
         r = output["results"][0]
         self.assertEqual(r["requested_version"], "9.9")
@@ -403,7 +436,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":"nonexistent-operator"}]',
+                "--olmv1", '[{"package":"nonexistent-operator"}]',
             ])
         self.assertEqual(output["operators_checked"], 1)
         self.assertEqual(output["lifecycle_unavailable"], ["nonexistent-operator"])
@@ -415,7 +448,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", json.dumps([
+                "--olmv1", json.dumps([
                     {"package": "cluster-logging", "version": "6.5.0"},
                     {"package": "cluster-logging", "version": "9.9.0"},
                     {"package": "nonexistent", "version": "1.0.0"},
@@ -438,7 +471,7 @@ class TestCmdOlmCheck(unittest.TestCase):
         with patch.object(plc_lookup, "api_search", side_effect=counting_search):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":"cluster-logging"}]',
+                "--olmv1", '[{"package":"cluster-logging"}]',
             ])
         self.assertNotIn("error", output["results"][0])
         self.assertEqual(call_count[0], 1, "Should call api_search exactly once")
@@ -448,12 +481,167 @@ class TestCmdOlmCheck(unittest.TestCase):
         with _mock_api_search([SAMPLE_PRODUCT]):
             output = _run_main([
                 "olm-check", "--ocp", "4.21",
-                "--operators", '[{"package":""},{}]',
+                "--olmv1", '[{"package":""},{}]',
             ])
         self.assertEqual(output["operators_checked"], 2)
         self.assertEqual(output["lifecycle_unavailable"], ["", ""])
         self.assertIn("error", output["results"][0])
         self.assertIn("error", output["results"][1])
+
+
+class TestOlmCheckRequiresOperatorList(unittest.TestCase):
+    def test_neither_olmv0_nor_olmv1(self):
+        """olm-check needs at least one operator list."""
+        with self.assertRaises(SystemExit) as ctx:
+            plc_lookup.main(args=["olm-check", "--ocp", "4.21"], output=io.StringIO())
+        self.assertNotEqual(ctx.exception.code, 0)
+
+
+class TestOlmCheckV0Catalogs(unittest.TestCase):
+    """OLMv0 operators get catalog sources, channels and versions from PackageManifests."""
+
+    def test_no_version_lists_compatible_versions_and_catalogs(self):
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.21", "--compatibleonly",
+                "--olmv0", '[{"package":"cluster-logging"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertEqual(
+            r["available_versions"], ["6.5"],
+            "Only 6.5 is compatible with OCP 4.21; 5.9 must be filtered out",
+        )
+        catalogs = r["source_catalogs"]
+        self.assertEqual(len(catalogs), 1)
+        self.assertEqual(catalogs[0]["catalog"], "redhat-operators")
+        self.assertEqual(catalogs[0]["catalog_namespace"], "openshift-marketplace")
+        self.assertEqual(
+            sorted(catalogs[0]["versions"]), ["6.5.0", "6.5.1"],
+            "5.9.14 maps to incompatible 5.9 and must be filtered out",
+        )
+        self.assertEqual(
+            sorted(catalogs[0]["versions"]["6.5.1"]["channels"]), ["stable", "stable-6.5"],
+            "A version present in several channels should list all of them",
+        )
+        self.assertEqual(catalogs[0]["versions"]["6.5.1"]["bundle"], "cluster-logging.v6.5.1")
+
+    def test_no_version_without_compatibleonly_keeps_everything(self):
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.21",
+                "--olmv0", '[{"package":"cluster-logging"}]',
+            ])
+        r = output["results"][0]
+        self.assertEqual(sorted(r["available_versions"]), ["5.9", "6.5"])
+        self.assertIn("5.9.14", r["source_catalogs"][0]["versions"])
+
+    def test_compatible_version_gets_lifecycle_only(self):
+        """Already-compatible version → package info, no upgrade guidance."""
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.21", "--compatibleonly",
+                "--olmv0", '[{"package":"cluster-logging","version":"6.5.0"}]',
+            ])
+        r = output["results"][0]
+        self.assertNotIn("error", r)
+        self.assertTrue(r["ocp_compatible"])
+        self.assertEqual(r["status"], "Full Support")
+        self.assertEqual(r["ocp_versions"], ["4.19", "4.20", "4.21"])
+        self.assertNotIn(
+            "source_catalogs", r,
+            "No upgrade guidance should be emitted for a compatible version",
+        )
+        self.assertNotIn("available_versions", r)
+
+    def test_incompatible_version_gets_upgrade_guidance(self):
+        """Incompatible version → compatible higher versions, catalogs and channels."""
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.21", "--compatibleonly",
+                "--olmv0", '[{"package":"cluster-logging","version":"5.9.14"}]',
+            ])
+        r = output["results"][0]
+        self.assertFalse(r["ocp_compatible"])
+        self.assertEqual(r["requested_version"], "5.9")
+        self.assertEqual(
+            r["available_versions"], ["6.5"],
+            "available_versions must be a JSON-serializable sorted list",
+        )
+        versions = r["source_catalogs"][0]["versions"]
+        self.assertEqual(
+            sorted(versions), ["6.5.0", "6.5.1"],
+            "Only compatible versions higher than 5.9.14 should be offered",
+        )
+        self.assertEqual(versions["6.5.0"]["channels"], ["stable-6.5"])
+
+    def test_incompatible_version_no_higher_version_available(self):
+        """No reachable upgrade in any catalog → no source_catalogs key."""
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.13", "--compatibleonly",
+                "--olmv0", '[{"package":"cluster-logging","version":"6.5.1"}]',
+            ])
+        r = output["results"][0]
+        self.assertFalse(r["ocp_compatible"])
+        self.assertNotIn("source_catalogs", r)
+        self.assertEqual(r["available_versions"], ["5.9"])
+
+    def test_packagemanifest_failure_still_returns_lifecycle(self):
+        failure = {"status": "not_found", "message": "failed to list packagemanifests"}
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests(failure):
+            output = _run_main([
+                "olm-check", "--ocp", "4.21", "--compatibleonly",
+                "--olmv0", '[{"package":"cluster-logging"}]',
+            ])
+        self.assertEqual(output["packagemanifest_error"], failure)
+        r = output["results"][0]
+        self.assertEqual(r["available_versions"], ["6.5"])
+        self.assertNotIn("source_catalogs", r)
+
+    def test_olmv1_gets_no_catalogs(self):
+        """OLMv1 operators are lifecycle-only — no PackageManifest data."""
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.21", "--compatibleonly",
+                "--olmv1", '[{"package":"cluster-logging"}]',
+            ])
+        r = output["results"][0]
+        self.assertEqual(r["available_versions"], ["6.5"])
+        self.assertNotIn("source_catalogs", r)
+
+    def test_both_lists_checked_together(self):
+        with _mock_api_search([SAMPLE_PRODUCT]), _mock_packagemanifests():
+            output = _run_main([
+                "olm-check", "--ocp", "4.21", "--compatibleonly",
+                "--olmv0", '[{"package":"cluster-logging"}]',
+                "--olmv1", '[{"package":"cluster-logging"}]',
+            ])
+        self.assertEqual(output["operators_checked"], 2)
+        self.assertIn("source_catalogs", output["results"][0])
+        self.assertNotIn("source_catalogs", output["results"][1])
+
+
+class TestSemverIsHigher(unittest.TestCase):
+    def test_core_comparison(self):
+        self.assertTrue(plc_lookup.semver_is_higher("6.5.1", "5.9.14"))
+        self.assertTrue(plc_lookup.semver_is_higher("6.5.1", "6.5.0"))
+        self.assertFalse(plc_lookup.semver_is_higher("6.5.0", "6.5.1"))
+        self.assertFalse(plc_lookup.semver_is_higher("6.5.0", "6.5.0"))
+
+    def test_leading_v_and_major_minor(self):
+        self.assertTrue(plc_lookup.semver_is_higher("v6.5.1", "6.5"))
+        self.assertFalse(plc_lookup.semver_is_higher("6.5", "6.5.1"))
+
+    def test_prerelease_precedence(self):
+        self.assertTrue(plc_lookup.semver_is_higher("1.0.0", "1.0.0-rc1"))
+        self.assertFalse(plc_lookup.semver_is_higher("1.0.0-rc1", "1.0.0"))
+        self.assertTrue(plc_lookup.semver_is_higher("1.0.0-rc.2", "1.0.0-rc.1"))
+        self.assertTrue(plc_lookup.semver_is_higher("1.0.0-rc.1.1", "1.0.0-rc.1"))
+
+    def test_unparseable_is_not_higher(self):
+        self.assertFalse(plc_lookup.semver_is_higher("latest", "1.0.0"))
+        self.assertFalse(plc_lookup.semver_is_higher("1.0.0", "latest"))
 
 
 class TestApiSearchErrors(unittest.TestCase):
@@ -569,7 +757,7 @@ class TestLiveAPI(unittest.TestCase):
     def test_olm_check_cluster_logging(self):
         output = _run_main([
             "olm-check", "--ocp", "4.21",
-            "--operators", '[{"package":"cluster-logging"}]',
+            "--olmv1", '[{"package":"cluster-logging"}]',
         ])
         self.assertEqual(output["operators_checked"], 1)
         self.assertEqual(
@@ -585,7 +773,7 @@ class TestLiveAPI(unittest.TestCase):
     def test_olm_check_nonexistent(self):
         output = _run_main([
             "olm-check", "--ocp", "4.21",
-            "--operators", '[{"package":"does-not-exist-xyz"}]',
+            "--olmv1", '[{"package":"does-not-exist-xyz"}]',
         ])
         self.assertEqual(output["lifecycle_unavailable"], ["does-not-exist-xyz"])
 
