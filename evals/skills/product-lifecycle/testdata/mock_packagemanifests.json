@@ -1,0 +1,108 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "metadata": {"name": "cluster-logging"},
+      "status": {
+        "catalogSource": "redhat-operators",
+        "catalogSourceNamespace": "openshift-marketplace",
+        "channels": [
+          {
+            "name": "stable-6.6",
+            "entries": [
+              {"name": "cluster-logging.v6.6.0", "version": "6.6.0"}
+            ]
+          },
+          {
+            "name": "stable-6.5",
+            "entries": [
+              {"name": "cluster-logging.v6.5.1", "version": "6.5.1"},
+              {"name": "cluster-logging.v6.5.0", "version": "6.5.0"}
+            ]
+          },
+          {
+            "name": "stable-5.9",
+            "entries": [
+              {"name": "cluster-logging.v5.9.14", "version": "5.9.14"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {"name": "compliance-operator"},
+      "status": {
+        "catalogSource": "redhat-operators",
+        "catalogSourceNamespace": "openshift-marketplace",
+        "channels": [
+          {
+            "name": "stable",
+            "entries": [
+              {"name": "compliance-operator.v1.10.0", "version": "1.10.0"},
+              {"name": "compliance-operator.v1.9.0", "version": "1.9.0"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {"name": "openshift-gitops-operator"},
+      "status": {
+        "catalogSource": "redhat-operators",
+        "catalogSourceNamespace": "openshift-marketplace",
+        "channels": [
+          {
+            "name": "gitops-1.22",
+            "entries": [
+              {"name": "openshift-gitops-operator.v1.22.0", "version": "1.22.0"}
+            ]
+          },
+          {
+            "name": "gitops-1.21",
+            "entries": [
+              {"name": "openshift-gitops-operator.v1.21.6", "version": "1.21.6"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {"name": "rhacs-operator"},
+      "status": {
+        "catalogSource": "redhat-operators",
+        "catalogSourceNamespace": "openshift-marketplace",
+        "channels": [
+          {
+            "name": "rhacs-5.0",
+            "entries": [
+              {"name": "rhacs-operator.v5.0.0", "version": "5.0.0"}
+            ]
+          },
+          {
+            "name": "rhacs-4.10",
+            "entries": [
+              {"name": "rhacs-operator.v4.10.11", "version": "4.10.11"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {"name": "openshift-cert-manager-operator"},
+      "status": {
+        "catalogSource": "redhat-operators",
+        "catalogSourceNamespace": "openshift-marketplace",
+        "channels": [
+          {
+            "name": "stable-v1",
+            "entries": [
+              {"name": "cert-manager-operator.v1.20.0", "version": "1.20.0"},
+              {"name": "cert-manager-operator.v1.19.0", "version": "1.19.0"}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
