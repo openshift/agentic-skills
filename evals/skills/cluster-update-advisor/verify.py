@@ -17,12 +17,12 @@ def _all_commands(result: dict[str, Any]) -> list[str]:
     return [a["command"] for a in plan.get("actions", []) if "command" in a]
 
 
-def _assert_any_command_contains(commands: list[str], substring: str, label: str, provider: str):
-    """Assert at least one command contains the substring."""
-    assert any(substring in cmd for cmd in commands), (
-        f"{provider}: no command contains '{substring}' ({label}). "
-        f"Commands: {commands}"
-    )
+def _find_command(commands: list[str], substrings: list[str]) -> int | None:
+    """Find first command index containing ALL substrings. None if not found."""
+    for i, cmd in enumerate(commands):
+        if all(s in cmd for s in substrings):
+            return i
+    return None
 
 
 def verify_mixed_operators_plan(
@@ -32,36 +32,42 @@ def verify_mixed_operators_plan(
     commands = _all_commands(result)
     assert commands, f"{provider_name}: remediationPlan.actions is empty"
 
-    # OLMv0: subscription patch for cluster-logging
-    _assert_any_command_contains(
-        commands, "subscriptions.operators.coreos.com",
-        "OLMv0 subscription patch", provider_name
-    )
-    _assert_any_command_contains(
-        commands, "cluster-logging",
-        "cluster-logging operator name", provider_name
-    )
-    _assert_any_command_contains(
-        commands, "stable-6.5",
-        "target channel stable-6.5", provider_name
+    # OLMv0: a single command must contain patch + resource + operator + channel
+    olmv0_idx = _find_command(commands, [
+        "oc patch", "subscriptions.operators.coreos.com",
+        "cluster-logging", "stable-6.5",
+    ])
+    assert olmv0_idx is not None, (
+        f"{provider_name}: no command contains all of "
+        f"['oc patch', 'subscriptions.operators.coreos.com', 'cluster-logging', 'stable-6.5']. "
+        f"Commands: {commands}"
     )
 
-    # OLMv1: clusterextension patch for serverless
-    _assert_any_command_contains(
-        commands, "clusterextensions.olm.operatorframework.io",
-        "OLMv1 clusterextension patch", provider_name
-    )
-    _assert_any_command_contains(
-        commands, "serverless-operator",
-        "serverless operator name", provider_name
+    # OLMv1: a single command must contain patch + resource + operator
+    olmv1_idx = _find_command(commands, [
+        "oc patch", "clusterextensions.olm.operatorframework.io",
+        "serverless-operator",
+    ])
+    assert olmv1_idx is not None, (
+        f"{provider_name}: no command contains all of "
+        f"['oc patch', 'clusterextensions.olm.operatorframework.io', 'serverless-operator']. "
+        f"Commands: {commands}"
     )
 
-    # Platform update
-    _assert_any_command_contains(
-        commands, "oc adm upgrade",
-        "platform update command", provider_name
+    # Platform update: a single command must contain oc adm upgrade + target version
+    platform_idx = _find_command(commands, ["oc adm upgrade", "4.21.16"])
+    assert platform_idx is not None, (
+        f"{provider_name}: no command contains all of "
+        f"['oc adm upgrade', '4.21.16']. "
+        f"Commands: {commands}"
     )
-    _assert_any_command_contains(
-        commands, "4.21.16",
-        "target version in platform update", provider_name
+
+    # Ordering: operator upgrades must come before platform update
+    assert olmv0_idx < platform_idx, (
+        f"{provider_name}: OLMv0 subscription patch (index {olmv0_idx}) "
+        f"should come before platform update (index {platform_idx})"
+    )
+    assert olmv1_idx < platform_idx, (
+        f"{provider_name}: OLMv1 clusterextension patch (index {olmv1_idx}) "
+        f"should come before platform update (index {platform_idx})"
     )
