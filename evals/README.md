@@ -101,8 +101,25 @@ ln -s ../../../path/to/my-skill my-skill
 evals/skills/my-skill/
 ├── system_prompt.md      # System prompt for the agent
 ├── test_cases.yaml       # Test cases with schemas and expected values
-└── verify.py             # (optional) Custom verification functions for _fn
+├── verify.py             # (optional) Custom verification functions for _fn
+└── testdata/             # (optional) Mock data files injected into the container
 ```
+
+### Test data injection
+
+To pass mock data (JSON fixtures, captured API responses, etc.) into the
+container without polluting the production skill directory, place files in
+a `testdata/` directory under the skill's eval directory. `run.sh` copies
+everything in `testdata/` into the skill's workspace inside the container,
+alongside `SKILL.md` and `scripts/`.
+
+```
+evals/skills/my-skill/testdata/mock_data.json   # lives in eval tree only
+→ copied to /app/workspace/skills/my-skill/mock_data.json inside container
+```
+
+Use `system_prompt.md` to instruct the agent to use the mock files when
+they exist (e.g. via CLI flags the skill script already supports).
 
 ### 3. Write test cases
 
@@ -168,6 +185,10 @@ evals/
 │   │   ├── system_prompt.md
 │   │   ├── test_cases.yaml
 │   │   └── verify.py       # Custom _fn verification
+│   ├── my-skill/
+│   │   ├── system_prompt.md
+│   │   ├── test_cases.yaml
+│   │   └── testdata/       # Mock files copied into container at runtime
 │   ├── openshift-docs/
 │   │   ├── system_prompt.md
 │   │   └── test_cases.yaml
