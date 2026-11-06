@@ -32,7 +32,7 @@ def main() -> None:
     async def run_query(
         body: dict[str, Any], request_timeout: int
     ) -> dict[str, Any]:
-        provider = create_provider(sdk.name)
+        provider = DeepAgentsProvider(model_route)
         try:
             result = await run_agent_query(
                 provider,
