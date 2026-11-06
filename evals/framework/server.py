@@ -12,10 +12,10 @@ from typing import Any
 from lightspeed_agentic.config import (
     parse_agent_timeout,
     parse_max_turns,
-    resolve_router_model,
-    resolve_sdk,
+    resolve_model_family,
 )
-from lightspeed_agentic.factory import create_provider
+from lightspeed_agentic.providers.deepagents import DeepAgentsProvider
+from lightspeed_agentic.providers.model_router import resolve_model_route
 from lightspeed_agentic.run_agent import run_agent_query
 from lightspeed_agentic.tls import configure_tls
 
