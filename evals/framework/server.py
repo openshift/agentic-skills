@@ -23,7 +23,6 @@ from lightspeed_agentic.tls import configure_tls
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     configure_tls()
-    sdk = resolve_sdk()
     model_family = resolve_model_family()
     model_route = resolve_model_route(model_family=model_family)
     model = model_route.model
