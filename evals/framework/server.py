@@ -24,7 +24,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     configure_tls()
     sdk = resolve_sdk()
-    model = resolve_router_model(sdk.name)
+    model_family = resolve_model_family()
+    model_route = resolve_model_route(model_family=model_family)
+    model = model_route.model
     timeout_seconds = parse_agent_timeout()
     max_turns = parse_max_turns()
     skills_dir = os.environ.get("LIGHTSPEED_SKILLS_DIR", "/app/skills")
