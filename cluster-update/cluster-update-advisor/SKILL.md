@@ -96,14 +96,6 @@ Treat the issue as a warning if would cause temporary disruption or slow updates
 
 If additional information or context is needed to classify a finding, these skills may be useful:
 
-- **`openshift-docs`** — Read official OpenShift update docs for version-specific
-  procedures and breaking changes.
-
-- **`prometheus`** — Query cluster metrics for trend analysis (etcd latency,
-  CPU headroom, firing alerts).
-
-- **`jira`** — Search Red Hat Jira for bugs and known issues affecting the target version.
-
 - **`product-lifecycle`** — Query Red Hat Product Life Cycle API to check
   support status and OCP compatibility for installed operators. Use the operator's
   `package` name from OLM readiness data to look up entries via the `package`
