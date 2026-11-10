@@ -1,0 +1,140 @@
+{
+  "skill_name": "argo-operator",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Namespace-scoped instance forbidden in an unlabeled destination",
+      "prompt": "Application payments in namespace team-frontend is OutOfSync. The last sync says deployments.apps is forbidden for system:serviceaccount:team-frontend:team-argocd-argocd-application-controller in namespace payments-dev. The ArgoCD CR team-argocd lives in team-frontend and is namespace-scoped. Destination namespace payments-dev has no argocd.argoproj.io/managed-by label. How should I fix the RBAC?",
+      "expectations": [
+        "Identifies the instance as namespace-scoped and the destination as payments-dev, a different namespace from team-frontend",
+        "States that the OpenShift GitOps operator creates the destination Role and RoleBinding from the argocd.argoproj.io/managed-by label, and that the label value must be the instance namespace team-frontend",
+        "Does not recommend a hand-written Role or RoleBinding for the application-controller ServiceAccount",
+        "Names the operator-owned objects team-argocd-argocd-application-controller and team-argocd-argocd-server in the destination namespace",
+        "States the impact of the label: every verb on every namespaced resource in payments-dev, including impersonating ServiceAccounts there, for every Application on that instance, still subject to the AppProject. Calling it 'admin-equivalent' without that qualification understates it"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Label is set but the Role was never created",
+      "prompt": "Namespace payments-dev is labeled argocd.argoproj.io/managed-by=team-frontend. ArgoCD team-argocd is in team-frontend. There is no Role or RoleBinding named team-argocd-argocd-application-controller in payments-dev, and the namespace is not terminating. Sync is still forbidden. Should I apply a RoleBinding myself?",
+      "expectations": [
+        "Says not to create the Role or RoleBinding by hand",
+        "Treats a correct managed-by label with those objects absent as an operator reconcile problem",
+        "Checks operator health in openshift-gitops-operator, such as the operator pod or the CSV phase, before recommending that the label be applied again",
+        "Does not treat a re-apply of the same label as the fix while the operator is the thing that failed to reconcile"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "NamespaceManagement with only the tenant CR",
+      "prompt": "We created a NamespaceManagement in payments-dev with spec.managedBy set to team-frontend so our namespace-scoped Argo CD can deploy there. No Role showed up. The ArgoCD CR has an empty spec.namespaceManagement. What is wrong?",
+      "expectations": [
+        "States that NamespaceManagement is a handshake and that one side alone leaves the grant incomplete",
+        "Reads status.conditions on the NamespaceManagement CR, and uses it as the discriminator: an ErrorOccurred condition saying the namespace is not permitted based on NamespaceManagement rules means the feature is enabled and the ArgoCD CR is the missing side, while no condition at all points at the operator environment. Asserting that the CR reports nothing fails this expectation",
+        "Requires ArgoCD.spec.namespaceManagement to allow the namespace with both name and allowManagedBy true",
+        "Requires ALLOW_NAMESPACE_MANAGEMENT_IN_NAMESPACE_SCOPED_INSTANCES to be true, says the feature is off by default, and reads it from the operator Deployment rather than only from Subscription.spec.config.env",
+        "States that a completed handshake is what makes the operator create the Role and RoleBinding, so the user should not create them",
+        "Notes that spec.managedBy must be the Argo CD instance namespace"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Cluster-scoped resource on a namespace-scoped instance",
+      "prompt": "Our namespace-scoped Argo CD in team-frontend manages payments-dev. The namespace is labeled argocd.argoproj.io/managed-by=team-frontend and the Role team-argocd-argocd-application-controller exists. Sync of a ClusterRole still fails with forbidden. Do we need another managed-by label?",
+      "expectations": [
+        "States that the managed-by grant is already in place because the label matches and the operator Role exists",
+        "States that a namespace-scoped instance cannot manage cluster-scoped resources such as ClusterRole, even when managed-by is set",
+        "Does not recommend another label, a hand-written ClusterRoleBinding, or elevating the tenant instance to cluster-admin"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "managed-by-cluster-argocd is not destination RBAC",
+      "prompt": "Destination namespace payments-dev has label argocd.argoproj.io/managed-by-cluster-argocd=team-frontend and no argocd.argoproj.io/managed-by label. The Application sync into payments-dev is forbidden. Someone said that label means the GitOps operator already granted RBAC. Is that right?",
+      "expectations": [
+        "States that argocd.argoproj.io/managed-by-cluster-argocd is the apps-in-any-namespace or sourceNamespaces label, not the destination-namespace grant",
+        "States that the destination grant is argocd.argoproj.io/managed-by set to the instance namespace, or a completed NamespaceManagement handshake",
+        "Does not treat managed-by-cluster-argocd as permission for the application controller to deploy workloads",
+        "Does not recommend creating a Role or RoleBinding by hand as the substitute"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "AppProject rejects a destination the operator already granted",
+      "prompt": "Application checkout destinations to namespace checkout-prod. The namespace is labeled argocd.argoproj.io/managed-by=team-frontend. Role and RoleBinding team-argocd-argocd-application-controller exist there and oc auth can-i create deployment as system:serviceaccount:team-frontend:team-argocd-argocd-application-controller in checkout-prod returns yes. The AppProject team-checkout destinations list only namespace checkout-dev. Sync says the destination is not permitted. What is the cause?",
+      "expectations": [
+        "States that the operator destination grant is present and that Kubernetes RBAC allows the controller ServiceAccount",
+        "Identifies AppProject team-checkout spec.destinations as the rejection, because checkout-prod is not listed and checkout-dev is",
+        "Does not recommend a Role, RoleBinding, or managed-by change",
+        "Does not recommend switching the Application to the default project"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Remote cluster destination",
+      "prompt": "Application edge syncs to server https://api.remote.example.com:6443, namespace factory. We labeled factory on the hub with argocd.argoproj.io/managed-by=team-frontend. The remote sync is still forbidden. Why did the GitOps operator not create the RBAC?",
+      "expectations": [
+        "States that argocd.argoproj.io/managed-by only applies to namespaces on the same cluster as the GitOps operator",
+        "States that a remote cluster destination needs its permissions created on that remote cluster",
+        "Does not claim the hub label should have created a Role in the remote namespace"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Application in a tenant namespace is ignored entirely",
+      "prompt": "I created Application checkout in namespace team-payments. kubectl get application checkout -n team-payments returns the object but status is completely empty — no sync status, no health, no conditions. It never appears in the Argo CD UI. The instance is openshift-gitops, installed by the OpenShift GitOps operator. What is wrong?",
+      "expectations": [
+        "Identifies the empty .status as the signature that the instance is not watching that namespace, rather than a sync, RBAC, or AppProject failure",
+        "States that the fix is .spec.sourceNamespaces on the ArgoCD CR, and that the operator derives the managed-by-cluster-argocd label, the Role and RoleBinding on applications.argoproj.io, and the --application-namespaces arguments from it",
+        "Does not recommend setting the argocd.argoproj.io/managed-by-cluster-argocd label by hand, writing a Role or RoleBinding, or editing --application-namespaces on the Deployment or StatefulSet",
+        "Also checks the AppProject's own spec.sourceNamespaces, noting that the default project does not permit other namespaces out of the box",
+        "Notes that the destination namespace grant is a separate question, so fixing sourceNamespaces alone may move the symptom from ignored to forbidden"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "InvalidSpecError distinguishes the AppProject layer from the instance layer",
+      "prompt": "Application orders in namespace team-orders has a status, and one condition: InvalidSpecError, 'Application is not allowed in namespace team-orders'. team-orders is already listed in ArgoCD.spec.sourceNamespaces. Why is it still failing?",
+      "expectations": [
+        "States that because the Application has a status at all, the instance is watching the namespace and the ArgoCD CR layer is already correct",
+        "Identifies the AppProject's spec.sourceNamespaces as the missing piece, not the ArgoCD CR",
+        "States that the AppProject is an ordinary Argo CD object and is not operator-owned, so editing it is a normal change that will not be reverted",
+        "Does not recommend re-adding or changing .spec.sourceNamespaces on the ArgoCD CR"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "User sees an empty UI while syncs work",
+      "prompt": "A developer logs into the Argo CD UI successfully through OpenShift OAuth but the application list is empty. Applications are syncing fine on their own. I added 'p, developer@corp.com, applications, get, */*, allow' to argocd-rbac-cm and it worked for about a minute, then they saw nothing again. What is happening?",
+      "expectations": [
+        "Separates Argo CD's own RBAC from Kubernetes RBAC, noting that syncs working normally proves the controller's permissions are fine and the problem is argocd-server authorization",
+        "States that the operator renders argocd-rbac-cm from the ArgoCD CR, so the direct ConfigMap edit was reverted on the next reconcile, and the fix belongs in .spec.rbac.policy",
+        "Checks what subject Argo CD actually saw before trusting the policy — for example argocd account get-user-info — noting that with OpenShift OAuth the subject may be a group rather than the email address",
+        "Mentions that an empty or absent .spec.rbac.defaultPolicy means an authenticated user with no matching rule gets nothing, which is the intended secure default"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "RBAC object format changes with apps-in-any-namespace",
+      "prompt": "After we enabled sourceNamespaces on our ArgoCD CR, a group that previously had access can still see the Applications in the openshift-gitops namespace but not the ones that moved into tenant namespaces. The rbac policy was not changed. Nothing is logging an error.",
+      "expectations": [
+        "Identifies that for the applications resource the policy object becomes <project>/<namespace>/<application> when sourceNamespaces is in use, instead of <project>/<application>",
+        "Explains that existing two-part rules keep matching Applications in the instance namespace and silently stop matching the relocated ones, which is why some are visible and some are not",
+        "States that no error is reported because this is a non-match rather than a failure",
+        "Gives the fix as .spec.rbac.policy on the ArgoCD CR rather than an argocd-rbac-cm edit"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "CR is already correct but was never reconciled",
+      "prompt": "I set .spec.sourceNamespaces on the ArgoCD CR two hours ago. kubectl get argocd shows the field is there. But the namespace still has no managed-by-cluster-argocd label and the controller still does not have --application-namespaces. Should I set the label manually to unblock the team?",
+      "expectations": [
+        "Says no, and does not recommend setting the label, the RBAC, or the controller flag by hand",
+        "Recognises this as an operator fault rather than a misplaced setting: the CR field is already correct, so repeating it is not a useful recommendation",
+        "Compares .metadata.generation against .status.observedGeneration on the ArgoCD CR as the discriminating check",
+        "Checks whether the field was silently pruned on write by an operator version that does not know it, by reading the CR back",
+        "Hands off operator and OLM triage — pod restarts, CSV phase, InstallPlan, conversion webhook — to skills/gitops/argo-cluster-debug rather than diagnosing it here"
+      ]
+    }
+  ]
+}

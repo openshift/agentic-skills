@@ -1,0 +1,106 @@
+{
+  "skill_name": "argo-app-sync-triage",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Auto-sync will not retry the same failed revision",
+      "prompt": "Application payments in team-frontend has been OutOfSync for three hours. It has syncPolicy.automated with prune false and selfHeal true. No sync operation is running. status.operationState.phase is Failed and finishedAt was three hours ago. The quota problem that caused the failure was fixed two hours ago. Why has it not recovered?",
+      "expectations": [
+        "States that Argo CD will not auto-sync the same revision again after a failed attempt, and that the controller logs this as 'Skipping auto-sync: most recent sync already to <revision>'",
+        "States that without spec.syncPolicy.retry an auto-sync failure is terminal for that revision, so a new commit or a manual sync is required",
+        "Explicitly says the Application will not recover on its own even though the underlying cause has cleared",
+        "Does not attribute the stall to selfHeal, to the reconciliation interval, or to a comparison problem"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "ComparisonError invalidates the OutOfSync reading",
+      "prompt": "Application checkout shows sync status Unknown with a ComparisonError condition reading 'rpc error: code = Unknown desc = authentication required'. The resource list still shows 4 of 9 resources OutOfSync. Which resources should I fix first?",
+      "expectations": [
+        "States that the comparison never completed, so the resource list is stale and the OutOfSync counts carry no information",
+        "Declines to triage the four resources and redirects to the repository credential as the cause",
+        "Identifies the credential lookup as matching by URL prefix, and that a .git suffix or an SSH versus HTTPS mismatch prevents a configured credential from being used",
+        "Checks blast radius — whether other Applications on the instance are also Unknown — to separate a repo-server or shared-credential fault from one Application's configuration"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Sync flapping from a mutating webhook, not a sync problem",
+      "prompt": "Application mesh-demo goes Synced right after each sync and is OutOfSync again within a minute. operationState.phase is Succeeded and finishedAt keeps updating. The diff shows a sidecar container and an annotation on the Deployment that are not in git. Should I just enable selfHeal and let it converge?",
+      "expectations": [
+        "Says that syncing again will not resolve this and that enabling selfHeal would make the flapping worse, not better",
+        "Identifies a mutating admission webhook or another controller as the writer of the sidecar and annotation",
+        "Recommends ignoreDifferences for the specific paths rather than a sync policy change",
+        "Notes that RespectIgnoreDifferences=true in syncOptions is what makes the sync itself honor ignoreDifferences, not only the diff"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Synced but the live object does not match git",
+      "prompt": "Application billing reports Synced, but the Deployment in billing-prod has 2 replicas and git says 5. reconciledAt is 40 seconds ago and status.sync.revision matches the branch head. The Deployment is not listed in status.resources. What is going on?",
+      "expectations": [
+        "States that Synced means the comparison found no difference, not that the cluster matches the repository",
+        "Identifies the absence of the Deployment from status.resources as the key evidence: Argo CD does not consider it part of the Application",
+        "Attributes it to the resource tracking method failing to match the live object, and checks app.kubernetes.io/instance or argocd.argoproj.io/tracking-id against the configured method",
+        "Mentions that a Helm chart setting app.kubernetes.io/instance itself, or 63-character truncation of the label, detaches a resource when the method is the default label",
+        "Does not conclude that a manual kubectl scale is the cause without checking tracking first"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Stuck sync is an unhealthy workload, not a sync fault",
+      "prompt": "Application platform has been in operationState.phase Running for 25 minutes. The syncResult shows every resource Synced except a Deployment in wave 2, which is applied but has no status yet. Resources in wave 3 have not been touched. Is the sync broken?",
+      "expectations": [
+        "States that the sync machinery is working correctly and is waiting at the wave gate",
+        "States that the wave gate is health, not existence — Argo CD waits for every resource in a wave to become Healthy before starting the next wave, so a successfully applied Deployment whose pods never become ready blocks the sync indefinitely",
+        "Investigates why the Deployment is unhealthy rather than looking for a fault in the sync",
+        "Hands off to skills/gitops/argo-app-health-triage for the workload diagnosis",
+        "Does not recommend terminating the operation or re-syncing as the first step"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "SyncFailed on forbidden, operator-managed instance",
+      "prompt": "A sync of Application orders failed. The syncResult message for the Deployment is 'deployments.apps is forbidden: User \"system:serviceaccount:team-argocd:team-argocd-argocd-application-controller\" cannot create resource \"deployments\" in API group \"apps\" in the namespace \"orders-prod\"'. The instance was installed with the OpenShift GitOps operator and is namespace-scoped. Give me the RoleBinding to apply.",
+      "expectations": [
+        "Does not produce a Role or RoleBinding manifest",
+        "States that on an operator-managed instance the destination-namespace Role and RoleBinding are created by the operator from the argocd.argoproj.io/managed-by label or a completed NamespaceManagement handshake, and that a hand-written binding will not be adopted",
+        "Routes to skills/gitops/argo-operator for the diagnosis",
+        "Also checks the AppProject layer, noting that Kubernetes RBAC and AppProject restrictions are independent and both can reject a sync"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Manual-sync Application is not a fault",
+      "prompt": "Automated check: Application legacy-erp in namespace apps has been OutOfSync for 6 days. Diagnose it.",
+      "expectations": [
+        "Checks spec.syncPolicy.automated before diagnosing anything",
+        "States that an Application with no automated policy is manual-sync and that sitting OutOfSync is its normal resting state, not a fault",
+        "Does not recommend enabling auto-sync, noting it is a policy decision that is often deliberate for production",
+        "Reports that no action is required rather than manufacturing a remediation"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Does not conflate diff state with operation state",
+      "prompt": "Application reporting is Synced but status.operationState.phase says Failed. Which one is right? Is my app broken?",
+      "expectations": [
+        "Explains that the two fields describe different things: sync status is the result of the most recent comparison, and operationState.phase is the outcome of the last sync operation",
+        "States that both readings can be correct simultaneously, because a comparison after a failed sync can legitimately find no difference",
+        "Reads the syncResult per-resource messages to establish what actually failed rather than treating the pair as contradictory",
+        "Notes that the Application's health status is a separate question from either field"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "PruneSkipped is not a failure",
+      "prompt": "After a sync, Application infra shows one resource with status PruneSkipped and the Application is still OutOfSync. The sync reported Succeeded. Is the sync broken, and should I turn on prune?",
+      "expectations": [
+        "States that PruneSkipped is not a failure: the resource exists live, is no longer in git, and Argo CD was told not to delete it",
+        "Names the three reasons — automated.prune false by default, a Prune=false sync-option annotation, or an IgnoreExtraneous compare-option annotation — and checks which applies",
+        "States that enabling prune is destructive and affects every live resource in the Application no longer present in git, leaving the decision to a human",
+        "Does not recommend prune: true as a routine fix"
+      ]
+    }
+  ]
+}

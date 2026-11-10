@@ -34,6 +34,11 @@ Symptom-to-cause mappings organized by Argo component. Read this in full before 
 
 ## Application Sync Failures
 
+> When the sync state itself is the symptom, `skills/gitops/argo-app-sync-triage` owns
+> the diagnosis and routes by state — `OutOfSync`, sync `Unknown`, stuck, failed, or
+> `Synced` but wrong. Load it instead of working down this section. The tables below
+> remain useful as a symptom index alongside it.
+
 ### ComparisonError: invalid manifests
 
 **Symptoms:** Application status shows `ComparisonError` condition. `.status.conditions[].message` contains schema validation or parsing errors.
@@ -66,6 +71,7 @@ kustomize build <path>
 
 **Causes:**
 - The Argo CD application controller ServiceAccount lacks RBAC to create/update the target resource
+- On an operator-managed namespace-scoped instance, the destination namespace was never granted. The operator creates that Role and RoleBinding from `argocd.argoproj.io/managed-by` or from a completed `NamespaceManagement` handshake. Do not create them by hand. Use `skills/gitops/argo-operator` for this case.
 - AppProject `clusterResourceWhitelist` or `namespaceResourceBlacklist` blocks the resource
 - Destination namespace not allowed by the AppProject
 
@@ -85,6 +91,12 @@ kubectl get appproject <project-name> -n "$NS" -o yaml
 kubectl auth can-i create <resource> \
   --as=system:serviceaccount:"$NS":"$CR"-argocd-application-controller -n <target-namespace>
 ```
+
+On an operator-managed instance, a missing Role in the destination namespace is fixed
+by the `argocd.argoproj.io/managed-by` label or by `NamespaceManagement`, not by
+applying a RoleBinding. Load `skills/gitops/argo-operator` before
+recommending any RBAC manifest. The objects the operator owns are named
+`<cr-name>-argocd-application-controller` and `<cr-name>-argocd-server`.
 
 ### OutOfSync but auto-sync not triggering
 

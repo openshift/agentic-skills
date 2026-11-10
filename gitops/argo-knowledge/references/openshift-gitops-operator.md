@@ -197,11 +197,27 @@ spec:
 On the `ArgoCD` side each entry requires both `name` and `allowManagedBy`.
 
 **Gotchas**
-- **One side alone does nothing, and reports nothing.** A `NamespaceManagement` with no
-  matching `ArgoCD.spec.namespaceManagement` entry is inert — no event, no condition. If a
-  tenant's Applications are not being reconciled, check both sides before anything else.
+- **One side alone does nothing, but it does report.** A `NamespaceManagement` with no
+  matching `ArgoCD.spec.namespaceManagement` entry is inert, and the operator records that
+  on the tenant CR: `status.conditions` gets `reason: ErrorOccurred` with the message
+  `Namespace <ns> is not permitted for management by ArgoCD instance <ns> based on
+  NamespaceManagement rules`. A matching entry yields `reason: Success`. No condition at
+  all means the operator never evaluated the CR — the feature environment is off, or
+  `spec.managedBy` names a namespace with no Argo CD instance. Read `status.conditions`
+  before checking anything else.
 - Prefer this over hand-editing `--application-namespaces`; the operator owns that flag
   and will reset it.
+- The feature is off until the operator environment sets
+  `ALLOW_NAMESPACE_MANAGEMENT_IN_NAMESPACE_SCOPED_INSTANCES=true`. Read it from the
+  operator Deployment; `Subscription.spec.config.env` is only present when an admin
+  added an override.
+- A completed handshake makes the operator create the tenant-namespace Role and
+  RoleBinding and add the namespace to the instance cluster secret. Do not create
+  that RBAC by hand. The cluster-admin alternative to the whole handshake is the
+  `argocd.argoproj.io/managed-by: <instance-namespace>` label on the destination
+  namespace. Object names, the exact verbs each Role grants, and the diagnosis of a
+  missing grant are in `skills/gitops/argo-operator` — this file stays the CR field
+  reference.
 - Relevant to onboarding: this is how a tenant namespace gets attached to a central Argo
   CD instance. See `skills/gitops/argo-team-onboard`.
 

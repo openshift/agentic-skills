@@ -100,11 +100,20 @@ at the first error.
 | # | Workflow | Use when |
 |---|----------|----------|
 | 1 | Argo CD Installation Check | User asks if Argo CD is installed, reports general Argo CD failures — **or as a prerequisite before any Application/ApplicationSet debugging** |
-| 2 | Application Debugging | Application sync failure, health degradation, `OutOfSync`, or `Unknown` status |
+| 2 | Application Debugging | An Application problem that is **not** a health status or a sync state — see the redirect below. Use for everything else about a single Application |
 | 3 | ApplicationSet Debugging | ApplicationSet not generating Applications, generating the wrong ones, or reporting errors |
 | 4 | Rollout Debugging | Canary or blue-green Rollout stuck, aborted, or degraded |
 | 5 | Log Analysis | Cross-component log correlation when the failing component is not yet known |
 | 6 | Operator / OLM triage | Argo CD itself is misbehaving and the instance looks healthy — upgrade wedged, operator pod crash-looping, CRD conversion webhook failing. See below; this is often upstream of everything else |
+
+**Health and sync status have their own skills. Load them instead of Workflow 2, not
+after it** — each carries the rollup and diff rules that Workflow 2 does not:
+
+| Symptom | Load instead |
+|---|---|
+| Health is `Degraded`, `Progressing`, `Missing`, or `Unknown` | `skills/gitops/argo-app-health-triage` |
+| Sync is `OutOfSync` or `Unknown`, or a sync is stuck, failed, or `Synced` while the cluster is wrong | `skills/gitops/argo-app-sync-triage` |
+| The fix is an operator input — sync `forbidden`, an Application ignored with no status, a human sees no Applications | `skills/gitops/argo-operator` |
 
 ### Workflow 6: Operator / OLM triage (OpenShift GitOps)
 
@@ -328,3 +337,6 @@ All CRDs use `apiVersion: argoproj.io/v1alpha1` unless noted:
 |-------|---------------|-------------|
 | The seven step-by-step debugging workflows (installation, Application, ApplicationSet, Rollout, Workflow, Events, log analysis) | `references/debug-workflows.md` | **Every debugging session** — load the workflow matching the symptom |
 | Symptom → cause → fix tables for Argo CD and Argo Rollouts | `references/troubleshooting.md` | Alongside a workflow, or when a workflow is inconclusive |
+| Application **health status** triage — `Degraded`, `Progressing`, `Missing`, `Unknown` — and how Argo CD computes and rolls up health | `skills/gitops/argo-app-health-triage` | The symptom is the health status itself, or an automated diagnosis was triggered by a sustained unhealthy status. Load it instead of Workflow 2, not after it |
+| Application **sync state** triage — `OutOfSync`, sync `Unknown`, a stuck or failed sync, `Synced` but wrong | `skills/gitops/argo-app-sync-triage` | The symptom is the sync status or a sync operation. Load it instead of Workflow 2, not after it |
+| Operator-owned behavior — destination-namespace RBAC (`managed-by`, `NamespaceManagement`), apps-in-any-namespace (`sourceNamespaces`), and UI and CLI RBAC (`spec.rbac`, `spec.sso`) | `skills/gitops/argo-operator` | The instance is operator-managed and the fix is an operator input: sync is `forbidden`, an Application is ignored with no status, or a human sees no Applications. Do not invent a RoleBinding or edit `argocd-cm`; that skill owns the diagnosis |

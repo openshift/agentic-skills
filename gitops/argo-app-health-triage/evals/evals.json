@@ -1,0 +1,94 @@
+{
+  "skill_name": "argo-app-health-triage",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Progressing inside the progress deadline is not 'still working'",
+      "prompt": "An automated check fired because Application payments in team-frontend has been Progressing for 4 minutes. The health message is 'Waiting for rollout to finish: 0 of 3 updated replicas are available...'. Is this still rolling out normally, or is something wrong?",
+      "expectations": [
+        "Does not conclude that the Application is fine merely because the status is Progressing rather than Degraded",
+        "States that a Deployment stays Progressing until its Progressing condition reaches ProgressDeadlineExceeded, and that progressDeadlineSeconds defaults to 600 seconds, so a 4-minute-old failure is indistinguishable from a healthy rollout at the Application level",
+        "Inspects the pods behind the Deployment — phase, container waiting reason, restart count, previous termination — rather than reasoning from the Application status alone",
+        "States what evidence would distinguish wedged from still working, such as whether replica counts or the health lastTransitionTime have moved"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Unknown masks a real fault",
+      "prompt": "Application checkout reports health Unknown. The health message on resource widgets.example.com/Widget is 'attempt to index a nil value (field status)'. The team says their Deployment is also crash looping. What is the root cause?",
+      "expectations": [
+        "Identifies the message as an error from a custom Lua health script, and the status as a failure to compute health rather than a failure of the workload",
+        "States that Unknown is the worst status in the rollup order, so it masks the crash-looping Deployment, which is why the Application does not report Degraded",
+        "Points at resource.customizations.health.<group>_<Kind> in argocd-cm as where the script lives, and locates the fix there rather than in the workload",
+        "Re-checks the remaining resources and reports the crash-looping Deployment as a second, masked finding rather than merging it into the Unknown",
+        "Does not claim the Widget CR itself is unhealthy on the strength of the Unknown status"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "A missing ConfigMap does not make an Application Missing",
+      "prompt": "Application reports health Missing. Someone deleted a ConfigMap that the app's Deployment mounts. Is the deleted ConfigMap why the Application health is Missing?",
+      "expectations": [
+        "States that it is not, because a missing resource only affects Application health when Argo CD can health-assess its kind, and there is no built-in or bundled health check for ConfigMap",
+        "Directs the investigation to a resource of a kind that does have a health assessment — such as Deployment, StatefulSet, Service, PVC, Job, Ingress, or a CRD with a bundled or custom Lua script",
+        "May note that the deleted ConfigMap can still cause a Degraded workload, for example CreateContainerConfigError, without being the source of the Missing status",
+        "Does not assert that any deleted resource makes an Application Missing"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Degraded and Synced at the same time",
+      "prompt": "Application api is Degraded and Synced. The Deployment health message says it exceeded its progress deadline and the pods are in CrashLoopBackOff with a non-zero exit code. The team wants to know whether to re-sync or hard refresh.",
+      "expectations": [
+        "States that Synced means live state already matches git, so drift is not the cause and re-syncing or refreshing will not change the outcome",
+        "Treats 'exceeded its progress deadline' as a timeout rather than a root cause, and goes to the pods for the actual failure",
+        "Uses the previous container's logs for a crash loop, noting that the current container has not failed yet",
+        "Names a specific cause supported by the evidence, rather than listing possibilities"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Pending deletion",
+      "prompt": "Application platform has been Progressing for 40 minutes. The only non-healthy resource shows health message 'Pending deletion'. What is happening and what should be done?",
+      "expectations": [
+        "States that a resource with a deletionTimestamp and no hook finalizer is reported Progressing with that message regardless of anything else",
+        "Checks metadata.finalizers on the object, and the namespace phase and finalizers, as the thing blocking deletion",
+        "Identifies this as a controller not removing its finalizer, not an Argo CD fault, and says that syncing or refreshing will not clear it",
+        "Does not recommend re-syncing the Application as the fix"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "No action required",
+      "prompt": "Automated diagnosis fired on Application data-migration, Progressing for 12 minutes. The only progressing resource is a Job whose pod is Running, restartPolicy OnFailure, writing new log lines, and the job normally takes 30 minutes. Produce a diagnosis.",
+      "expectations": [
+        "States that a Job with no Complete or Failed condition is reported Progressing, and that a pod with restartPolicy OnFailure or Never is Progressing while Running rather than Healthy, so both are expected here",
+        "Concludes that no action is required and returns a diagnosis without a remediation, rather than inventing a fix for a healthy long-running job",
+        "Supports the conclusion with observed progress, such as advancing log output or a recent health lastTransitionTime",
+        "Does not recommend deleting, restarting, or re-syncing the Job"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Self-heal makes a cluster-side fix wrong",
+      "prompt": "Application web is Degraded. The container is in ImagePullBackOff because the image tag in the manifests is wrong. spec.syncPolicy.automated.selfHeal is true. Give me the command to fix it.",
+      "expectations": [
+        "States that the cause is in the manifests, so the correction belongs in git",
+        "States that with selfHeal true a manual cluster-side change such as kubectl set image is reverted by Argo CD within seconds, so it is not a fix",
+        "Does not supply a kubectl or oc command that mutates the live Deployment as the answer",
+        "Reports the wrong tag as the root cause, with the ImagePullBackOff reason or event text as the supporting evidence"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Hook pod failure does not surface as unhealthy",
+      "prompt": "Application billing shows health Missing and the sync operation phase is Failed. A PreSync hook pod is in ImagePullBackOff, but no resource in the Application shows as Degraded. Why is nothing Degraded, and what is the root cause?",
+      "expectations": [
+        "States that hooks are excluded from the Application health rollup, which is why the failing hook pod does not appear as a Degraded resource",
+        "Adds that a pod with restartPolicy OnFailure or Never does not take the waiting-reason Degraded path at all, by design, so hook pods are not failed prematurely",
+        "Identifies the failed PreSync hook as the reason the sync never reached the resources, making the missing resources a symptom rather than a separate finding",
+        "Reports one root cause — the hook image cannot be pulled — rather than reporting the missing resources as an independent problem"
+      ]
+    }
+  ]
+}
