@@ -27,13 +27,12 @@ Read-only diagnosis of behavior the OpenShift GitOps operator owns, where the fi
 an operator input — a label, a CR field, an operator environment variable — and never
 the reconciled object itself.
 
-Three topics:
+Two topics:
 
 | Topic | Symptom |
 |---|---|
 | Destination-namespace RBAC | Sync fails `forbidden` or `Unauthorized` |
 | Apps in any namespace | An `Application` outside the Argo CD namespace is ignored, with no status at all |
-| UI and CLI RBAC | A human sees no Applications, or gets `permission denied` |
 
 Each is a different "permission denied" with an unrelated fix, so the skill routes on
 cheap discriminating evidence before loading a reference.

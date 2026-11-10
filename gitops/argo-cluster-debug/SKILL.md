@@ -113,7 +113,7 @@ after it** — each carries the rollup and diff rules that Workflow 2 does not:
 |---|---|
 | Health is `Degraded`, `Progressing`, `Missing`, or `Unknown` | `skills/gitops/argo-app-health-triage` |
 | Sync is `OutOfSync` or `Unknown`, or a sync is stuck, failed, or `Synced` while the cluster is wrong | `skills/gitops/argo-app-sync-triage` |
-| The fix is an operator input — sync `forbidden`, an Application ignored with no status, a human sees no Applications | `skills/gitops/argo-operator` |
+| The fix is an operator input — sync `forbidden`, or an Application ignored with no status | `skills/gitops/argo-operator` |
 
 ### Workflow 6: Operator / OLM triage (OpenShift GitOps)
 
@@ -339,4 +339,4 @@ All CRDs use `apiVersion: argoproj.io/v1alpha1` unless noted:
 | Symptom → cause → fix tables for Argo CD and Argo Rollouts | `references/troubleshooting.md` | Alongside a workflow, or when a workflow is inconclusive |
 | Application **health status** triage — `Degraded`, `Progressing`, `Missing`, `Unknown` — and how Argo CD computes and rolls up health | `skills/gitops/argo-app-health-triage` | The symptom is the health status itself, or an automated diagnosis was triggered by a sustained unhealthy status. Load it instead of Workflow 2, not after it |
 | Application **sync state** triage — `OutOfSync`, sync `Unknown`, a stuck or failed sync, `Synced` but wrong | `skills/gitops/argo-app-sync-triage` | The symptom is the sync status or a sync operation. Load it instead of Workflow 2, not after it |
-| Operator-owned behavior — destination-namespace RBAC (`managed-by`, `NamespaceManagement`), apps-in-any-namespace (`sourceNamespaces`), and UI and CLI RBAC (`spec.rbac`, `spec.sso`) | `skills/gitops/argo-operator` | The instance is operator-managed and the fix is an operator input: sync is `forbidden`, an Application is ignored with no status, or a human sees no Applications. Do not invent a RoleBinding or edit `argocd-cm`; that skill owns the diagnosis |
+| Operator-owned behavior — destination-namespace RBAC (`managed-by`, `NamespaceManagement`) and apps-in-any-namespace (`sourceNamespaces`) | `skills/gitops/argo-operator` | The instance is operator-managed and the fix is an operator input: sync is `forbidden`, or an Application is ignored with no status. Do not invent a RoleBinding or edit `argocd-cm`; that skill owns the diagnosis |

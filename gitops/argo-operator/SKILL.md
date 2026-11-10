@@ -3,13 +3,12 @@ name: argo-operator
 description: >
   Diagnose behavior that the Red Hat OpenShift GitOps operator owns on a live cluster,
   where the fix is an operator input — a label, an ArgoCD CR field, an operator
-  environment variable — rather than the reconciled object itself. Three topics.
+  environment variable — rather than the reconciled object itself. Two topics.
   Destination-namespace RBAC: the operator writes the Role and RoleBinding from the
   argocd.argoproj.io/managed-by label or a completed NamespaceManagement handshake, so
   use it when a sync fails forbidden or Unauthorized. Apps in any namespace: an
   Application object outside the Argo CD namespace is ignored with no status, driven by
-  sourceNamespaces. UI and CLI RBAC: a human sees no Applications or gets permission
-  denied, driven by spec.rbac and spec.sso. Read-only, and written for an automated
+  sourceNamespaces. Read-only, and written for an automated
   run with no human available — it never writes the object the operator owns, and it
   never asks a question. Not for sync or health status triage.
 license: MIT
@@ -85,12 +84,11 @@ Load exactly one topic. These look alike at a distance and have unrelated fixes.
 |---|---|---|
 | Sync fails `forbidden` or `Unauthorized`; the controller cannot write to the destination namespace | Destination-namespace RBAC | `references/destination-namespace-rbac.md` |
 | An `Application` object outside the Argo CD namespace is ignored — no status at all | Apps in any namespace | `references/apps-in-any-namespace.md` |
-| A human sees no Applications in the UI, or gets `permission denied` from the CLI | UI and CLI RBAC | `references/ui-cli-rbac.md` |
 
-All three are a different "permission denied", and the distinguishing evidence is
-cheap: an empty `.status` means the Application is not being watched, a `forbidden`
-sync means the controller lacks Kubernetes rights, and a human seeing nothing while
-syncs work normally is Argo CD's own RBAC. Establish which before loading a reference.
+Each is a different "permission denied", and the distinguishing evidence is cheap: an
+empty `.status` means the Application is not being watched, while a `forbidden` sync
+means the controller lacks Kubernetes rights. Establish which before loading a
+reference.
 
 If the symptom is not operator-owned, hand off rather than guessing. Sync state is
 `skills/gitops/argo-app-sync-triage`, health is `skills/gitops/argo-app-health-triage`.
@@ -240,28 +238,6 @@ you are recommending a change to.
 
 Load `references/apps-in-any-namespace.md`.
 
-## Topic: UI and CLI RBAC
-
-A human logs in and sees no Applications, or `argocd app get` returns `permission
-denied`. This is Argo CD's own authorization layer and is unrelated to the Kubernetes
-RBAC above.
-
-| | UI and CLI RBAC | Destination-namespace RBAC |
-|---|---|---|
-| Who is denied | A human | The application-controller ServiceAccount |
-| Enforced by | argocd-server, from `argocd-rbac-cm` | The Kubernetes API server |
-| Symptom | Empty Application list, `permission denied` | Sync fails `forbidden` |
-
-A user seeing nothing while syncs work normally is always this topic. The operator
-renders `argocd-rbac-cm` and the SSO config from `.spec.rbac` and `.spec.sso`, so a
-direct ConfigMap edit is reverted and presents as a fix that works for a minute.
-
-Establish the subject Argo CD actually saw before reading any policy — an empty
-`groups` list against a group-based policy is the most common cause, and no amount of
-policy review finds it.
-
-Load `references/ui-cli-rbac.md`.
-
 ## If the run writes a structured result
 
 When the output is an `AnalysisResult`, each topic's Report maps onto its fields:
@@ -322,6 +298,5 @@ eventually consistent, so a `mutation` with no `post-check` cannot be verified.
 |-------|------|----------------|
 | Destination-namespace RBAC — decision order, commands, and the two grant paths | `references/destination-namespace-rbac.md` | The symptom is a `forbidden` or `Unauthorized` sync, or a question about `managed-by` or `NamespaceManagement` |
 | Apps in any namespace — `sourceNamespaces`, the two layers, and addressing Applications afterwards | `references/apps-in-any-namespace.md` | An Application outside the instance namespace has no status, or `Application is not allowed in namespace` |
-| UI and CLI RBAC — subject extraction, default policy, policy rules, SSO | `references/ui-cli-rbac.md` | A human cannot see or act on Applications |
 | Application **sync** state triage | `skills/gitops/argo-app-sync-triage` | The symptom is `OutOfSync`, a failed or stuck sync, or `Synced` while the cluster is wrong |
 | Application **health** status triage | `skills/gitops/argo-app-health-triage` | The symptom is `Degraded`, `Progressing`, `Missing`, or health `Unknown` |

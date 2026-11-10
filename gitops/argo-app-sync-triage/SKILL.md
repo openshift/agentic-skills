@@ -249,5 +249,5 @@ Application is unchanged.
 | OutOfSync: drift, auto-sync declining, perpetual diff | `references/outofsync.md` | `OutOfSync` with no operation running |
 | Synced but wrong | `references/false-synced.md` | Status is `Synced` and the cluster still does not match |
 | Application **health** status triage | `skills/gitops/argo-app-health-triage` | The symptom is `Degraded`, `Progressing`, `Missing`, or health `Unknown` |
-| Operator-owned behavior — destination RBAC, apps-in-any-namespace, UI and CLI RBAC | `skills/gitops/argo-operator` | A sync is `forbidden`, or the Application is ignored entirely with no status |
+| Operator-owned behavior — destination RBAC, apps-in-any-namespace | `skills/gitops/argo-operator` | A sync is `forbidden`, or the Application is ignored entirely with no status |
 | ApplicationSet, Rollout, and controller-level debugging | `skills/gitops/argo-cluster-debug` | The symptom is not an Application sync state |

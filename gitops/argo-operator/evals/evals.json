@@ -82,7 +82,7 @@
     {
       "id": 8,
       "name": "Application in a tenant namespace is ignored entirely",
-      "prompt": "I created Application checkout in namespace team-payments. kubectl get application checkout -n team-payments returns the object but status is completely empty — no sync status, no health, no conditions. It never appears in the Argo CD UI. The instance is openshift-gitops, installed by the OpenShift GitOps operator. What is wrong?",
+      "prompt": "I created Application checkout in namespace team-payments. kubectl get application checkout -n team-payments returns the object but status is completely empty \u2014 no sync status, no health, no conditions. It never appears in the Argo CD UI. The instance is openshift-gitops, installed by the OpenShift GitOps operator. What is wrong?",
       "expectations": [
         "Identifies the empty .status as the signature that the instance is not watching that namespace, rather than a sync, RBAC, or AppProject failure",
         "States that the fix is .spec.sourceNamespaces on the ArgoCD CR, and that the operator derives the managed-by-cluster-argocd label, the Role and RoleBinding on applications.argoproj.io, and the --application-namespaces arguments from it",
@@ -104,17 +104,6 @@
     },
     {
       "id": 10,
-      "name": "User sees an empty UI while syncs work",
-      "prompt": "A developer logs into the Argo CD UI successfully through OpenShift OAuth but the application list is empty. Applications are syncing fine on their own. I added 'p, developer@corp.com, applications, get, */*, allow' to argocd-rbac-cm and it worked for about a minute, then they saw nothing again. What is happening?",
-      "expectations": [
-        "Separates Argo CD's own RBAC from Kubernetes RBAC, noting that syncs working normally proves the controller's permissions are fine and the problem is argocd-server authorization",
-        "States that the operator renders argocd-rbac-cm from the ArgoCD CR, so the direct ConfigMap edit was reverted on the next reconcile, and the fix belongs in .spec.rbac.policy",
-        "Checks what subject Argo CD actually saw before trusting the policy — for example argocd account get-user-info — noting that with OpenShift OAuth the subject may be a group rather than the email address",
-        "Mentions that an empty or absent .spec.rbac.defaultPolicy means an authenticated user with no matching rule gets nothing, which is the intended secure default"
-      ]
-    },
-    {
-      "id": 11,
       "name": "RBAC object format changes with apps-in-any-namespace",
       "prompt": "After we enabled sourceNamespaces on our ArgoCD CR, a group that previously had access can still see the Applications in the openshift-gitops namespace but not the ones that moved into tenant namespaces. The rbac policy was not changed. Nothing is logging an error.",
       "expectations": [
@@ -125,7 +114,7 @@
       ]
     },
     {
-      "id": 12,
+      "id": 11,
       "name": "CR is already correct but was never reconciled",
       "prompt": "I set .spec.sourceNamespaces on the ArgoCD CR two hours ago. kubectl get argocd shows the field is there. But the namespace still has no managed-by-cluster-argocd label and the controller still does not have --application-namespaces. Should I set the label manually to unblock the team?",
       "expectations": [
@@ -133,7 +122,7 @@
         "Recognises this as an operator fault rather than a misplaced setting: the CR field is already correct, so repeating it is not a useful recommendation",
         "Compares .metadata.generation against .status.observedGeneration on the ArgoCD CR as the discriminating check",
         "Checks whether the field was silently pruned on write by an operator version that does not know it, by reading the CR back",
-        "Hands off operator and OLM triage — pod restarts, CSV phase, InstallPlan, conversion webhook — to skills/gitops/argo-cluster-debug rather than diagnosing it here"
+        "Hands off operator and OLM triage \u2014 pod restarts, CSV phase, InstallPlan, conversion webhook \u2014 to skills/gitops/argo-cluster-debug rather than diagnosing it here"
       ]
     }
   ]

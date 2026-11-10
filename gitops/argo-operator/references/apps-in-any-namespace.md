@@ -153,7 +153,9 @@ This also changes RBAC policy strings. With `sourceNamespaces` in play, the obje
 an `applications` policy rule becomes `<project>/<namespace>/<application>` instead of
 `<project>/<application>`. Existing two-part rules stop matching the Applications that
 moved, so a working RBAC policy silently narrows at the moment this feature is enabled.
-That is `ui-cli-rbac.md`.
+Nothing logs an error, because a non-match is not a failure. The fix is
+`.spec.rbac.policy` on the `ArgoCD` CR — the operator renders `argocd-rbac-cm` from it,
+so a direct ConfigMap edit is reverted on the next reconcile.
 
 ## 5. Report
 
