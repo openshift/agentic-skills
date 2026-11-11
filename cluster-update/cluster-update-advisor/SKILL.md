@@ -262,7 +262,7 @@ oc adm upgrade --to=${TARGET_VERSION}
 Verify the update has started:
 
 ```bash
-oc wait --for=jsonpath='{.status.desired.version}=${TARGET_VERSION}' clusterversions.config.openshift.io version --timeout=10s
+oc wait --for=jsonpath='{.status.desired.version}=${TARGET_VERSION}' clusterversions.config.openshift.io version --timeout=60s
 ```
 
 Longer running checks beyond checking for cluster update to start should be done in the `verification` section in the
