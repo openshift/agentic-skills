@@ -1,0 +1,36 @@
+- name: restore_requires_target
+  query: "A user asks to restore backup app-backup but gives no target namespace. The skill rejects an implicit in-place restore. Is it safe to create the Restore now?"
+  schema:
+    type: object
+    properties:
+      create_now:
+        type: boolean
+        description: "Whether the restore skill permits creation without a target choice."
+    required: [create_now]
+  expected:
+    create_now: false
+
+- name: restore_select_monitor
+  query: "The restore request was submitted. Which script polls the Restore until a terminal phase?"
+  schema:
+    type: object
+    properties:
+      script:
+        type: string
+        enum: ["create_restore.py", "monitor_restore.py", "verify_restore.py"]
+        description: "Use the restore-backup skill."
+    required: [script]
+  expected:
+    script: "monitor_restore.py"
+
+- name: restore_volume_failure
+  query: "A Restore reports phase Completed and zero top-level errors, but its DataDownload is Failed. Should the agent say the restore fully succeeded?"
+  schema:
+    type: object
+    properties:
+      fully_succeeded:
+        type: boolean
+        description: "Whether the observed volume failure permits a full success claim."
+    required: [fully_succeeded]
+  expected:
+    fully_succeeded: false

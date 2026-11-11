@@ -1,0 +1,48 @@
+- name: diagnose_data_mover
+  query: "A Backup is PartiallyFailed and a DataUpload is Failed with a status message. Which category should the diagnose skill report for that child operation?"
+  schema:
+    type: object
+    properties:
+      category:
+        type: string
+        enum: ["snapshot", "data_mover", "filesystem_volume"]
+        description: "Use the diagnose skill's child operation categories."
+    required: [category]
+  expected:
+    category: "data_mover"
+
+- name: diagnose_csi_evidence
+  query: "A Backup status has two CSI snapshots attempted and one completed. Does that count difference alone prove the CSI root cause?"
+  schema:
+    type: object
+    properties:
+      proves_root_cause:
+        type: boolean
+        description: "Whether status counts alone establish the cause."
+    required: [proves_root_cause]
+  expected:
+    proves_root_cause: false
+
+- name: diagnose_retry_behavior
+  query: "A Restore failed and the diagnose skill found a failed DataDownload. Should diagnosis automatically retry the Restore into the same namespace?"
+  schema:
+    type: object
+    properties:
+      retry_automatically:
+        type: boolean
+        description: "Whether the read-only diagnose skill retries restores."
+    required: [retry_automatically]
+  expected:
+    retry_automatically: false
+
+- name: diagnose_raw_log_safety
+  query: "The diagnose skill reports five Restore warnings and provides a manual log command. Should the agent run the raw Velero logs into its context before asking an operator for a redacted excerpt?"
+  schema:
+    type: object
+    properties:
+      run_raw_logs:
+        type: boolean
+        description: "Whether the agent should ingest raw operation logs."
+    required: [run_raw_logs]
+  expected:
+    run_raw_logs: false
