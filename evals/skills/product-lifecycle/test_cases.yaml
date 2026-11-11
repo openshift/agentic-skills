@@ -253,3 +253,64 @@
     required: ["product_found"]
   expected:
     product_found: false
+
+# Test 10: Already-compatible operator under --compatibleonly — no upgrade
+# path is returned for compatible operators.
+- name: plc_compatibleonly_already_compatible
+  query: |
+    The operator openshift-gitops-operator v1.21.6 is installed as OLMv0
+    (Subscription-managed) on a cluster targeting OCP 4.21. This version is
+    believed to be compatible with OCP 4.21.
+
+    Use the product-lifecycle skill with --compatibleonly to verify.
+
+    Report whether the current version is compatible, its lifecycle status,
+    and whether any upgrade is needed.
+  schema:
+    type: object
+    properties:
+      ocp_compatible:
+        type: boolean
+        description: "Whether the currently installed version (1.21.6) is compatible with OCP 4.21"
+      installed_status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
+        description: "Normalized lifecycle status of the installed version 1.21"
+      has_upgrade_path:
+        type: boolean
+        description: "Whether an upgrade is needed/indicated by the --compatibleonly output for an already-compatible operator (should be false \u2014 no upgrade data is returned for compatible operators)"
+    required: ["ocp_compatible", "installed_status", "has_upgrade_path"]
+  expected:
+    has_upgrade_path: false
+    installed_status: "supported"
+    ocp_compatible: true
+
+# Test 11: Package found but requested version not tracked — distinct from
+# package-not-found; available_versions lists what the PLC API tracks.
+- name: plc_version_untracked
+  query: |
+    Use the product-lifecycle skill to check lifecycle data for the OLMv0
+    (Subscription-managed) operator openshift-gitops-operator v9.9.0 against
+    OCP 4.21. This version string may not be tracked by the PLC API.
+
+    Report whether the product was found in the PLC API, whether the specific
+    version is tracked, and which versions the PLC API lists as available.
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether the package exists in the PLC API (distinct from a version being untracked)"
+      version_tracked:
+        type: boolean
+        description: "Whether the requested version (9.9) has lifecycle data"
+      available_versions:
+        type: array
+        items:
+          type: string
+        description: "PLC major.minor versions the API lists for this product"
+    required: ["product_found", "version_tracked", "available_versions"]
+  expected:
+    available_versions: ["1.21", "1.22"]
+    product_found: true
+    version_tracked: false
