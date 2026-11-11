@@ -6,6 +6,11 @@ Eval framework for testing that AI agents can correctly discover skills, execute
 
 Each test case sends a query to an agent running in a container, along with a JSON schema for structured output. The framework validates the response against the schema and then checks the expected values.
 
+`run.sh` mounts `framework/server.py` into each provider container, replacing
+the image's batch entrypoint. This eval-only adapter exposes `/health` and
+`/v1/agent/run` and calls the sandbox's `run_agent_query()` directly, without
+publishing Kubernetes Results. Host ports are bound to `127.0.0.1`.
+
 **Reference skill: [`evals/skills/find-token/`](skills/find-token/)** — demonstrates both verification patterns in one skill.
 
 ### Static matching (knowledge retrieval)
@@ -79,6 +84,9 @@ EVAL_PROVIDERS=claude,gemini bash evals/run.sh
 # Generate JSON report
 bash evals/run.sh --eval-report=evals/report.json
 ```
+
+Container logs are saved to
+`.eval-workspaces/output-<provider>/container.log` before containers are removed.
 
 ## Adding a New Skill Eval
 
@@ -160,6 +168,7 @@ evals/
 ├── conftest.py             # Provider parametrization, fixtures
 ├── framework/              # Eval infrastructure
 │   ├── runner.py           # HTTP client with retry/backoff
+│   ├── server.py           # Eval-only HTTP adapter for batch images
 │   ├── credentials.py      # Provider credential auto-detection
 │   └── report.py           # JSON report plugin
 ├── skills/                 # Per-skill eval definitions
@@ -188,5 +197,7 @@ evals/
 | `OPENAI_MODEL` | `gpt-5.4` | OpenAI model override |
 | `EVAL_BASE_PORT` | `18080` | Starting port for provider containers |
 | `EVAL_HEALTH_TIMEOUT` | `60` | Seconds to wait for container health check |
+| `LIGHTSPEED_AGENT_TIMEOUT_SECONDS` | `240` | Maximum seconds per agent invocation |
+| `LIGHTSPEED_AGENT_MAX_TURNS` | `20` | Maximum provider turns per agent invocation |
 | `IMAGE` | `lightspeed-agentic-sandbox:latest` | Container image to use |
 | `PYTEST` | `python3 -m pytest` | pytest command (set to `python3 -m pytest -n 4` for parallel) |

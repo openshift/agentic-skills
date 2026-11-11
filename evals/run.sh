@@ -107,19 +107,21 @@ for i in "${!PROVIDERS[@]}"; do
     cp -al "$SHARED_WORKSPACE/skills" "$workdir/skills"
     chmod -R 777 "$workdir" "$outdir"
 
-    cid=$($RUNTIME run -d --rm \
+    cid=$($RUNTIME run -d \
         --name "eval-${name}" \
-        -p "${port}:8080" \
+        -p "127.0.0.1:${port}:8080" \
         -v "${workdir}:/app/workspace:Z" \
         -v "${outdir}:/app/eval-output:Z" \
+        -v "$(pwd)/evals/framework/server.py:/app/eval-server.py:ro,Z" \
         -e EVAL_OUTPUT_DIR="/app/eval-output" \
-        -e PYTHONPATH="/app/src:/opt/app-root/lib64/python3.12/site-packages" \
         "${GCLOUD_MOUNT_ARGS[@]}" \
         -e LIGHTSPEED_PROVIDER="$agent_provider" \
         -e LIGHTSPEED_MODEL_PROVIDER="$model_provider" \
         -e LIGHTSPEED_PROVIDER_PROJECT="${ANTHROPIC_VERTEX_PROJECT_ID:-}" \
         -e LIGHTSPEED_PROVIDER_REGION="${CLOUD_ML_REGION:-}" \
         -e LIGHTSPEED_SKILLS_DIR="/app/workspace/skills" \
+        -e LIGHTSPEED_AGENT_TIMEOUT_SECONDS="${LIGHTSPEED_AGENT_TIMEOUT_SECONDS:-240}" \
+        -e LIGHTSPEED_AGENT_MAX_TURNS="${LIGHTSPEED_AGENT_MAX_TURNS:-20}" \
         -e ANTHROPIC_API_KEY \
         -e CLAUDE_CODE_USE_VERTEX \
         -e ANTHROPIC_VERTEX_PROJECT_ID \
@@ -132,7 +134,7 @@ for i in "${!PROVIDERS[@]}"; do
         -e AWS_SECRET_ACCESS_KEY \
         -e AWS_REGION \
         $(model_env "$name") \
-        "$IMAGE")
+        "$IMAGE" python3.12 /app/eval-server.py)
 
     CONTAINERS+=("$cid")
     echo "  ${name}: port ${port} (container ${cid:0:12})"
