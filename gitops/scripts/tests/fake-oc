@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Stub `oc` for blast-radius tests. Behaviour is driven by $FAKE_MODE so the
+# failure paths — the ones that matter — can be asserted without a cluster.
+#
+#   ok        normal cluster with a known fixture topology
+#   rbac      every call is forbidden
+#   rbac-list named reads succeed but cluster-wide LIST is forbidden. This is the
+#             realistic RBAC shape and the one that produced silent zeros: the
+#             object resolves, so the script proceeds, and only the fan-out query
+#             fails. `rbac` alone does not exercise it, because the existence
+#             probe fails first and raises the flag for the wrong reason.
+#   notfound  named objects do not exist
+#   nocluster api-resources fails
+set -uo pipefail
+MODE="${FAKE_MODE:-ok}"
+
+[[ "$MODE" == "nocluster" ]] && { echo "Unable to connect to the server" >&2; exit 1; }
+[[ "${1:-}" == "api-resources" ]] && { echo "NAME SHORTNAMES APIVERSION"; exit 0; }
+[[ "${1:-}" != "get" ]] && exit 0
+shift
+ARGS="$*"
+
+if [[ ( "$MODE" == "rbac" || "$MODE" == "rbac-list" ) && "$ARGS" == *"-A"* ]]; then
+  echo 'Error from server (Forbidden): applications.argoproj.io is forbidden' >&2
+  exit 1
+fi
+
+# Named-object existence probes use -o name.
+if [[ "$ARGS" == *"-o name"* ]]; then
+  if [[ "$MODE" == "notfound" ]]; then
+    echo 'Error from server (NotFound): the server could not find the requested resource' >&2
+    exit 1
+  fi
+  if [[ "$MODE" == "rbac" ]]; then
+    echo 'Error from server (Forbidden): forbidden' >&2
+    exit 1
+  fi
+  echo "${1}/${2}"; exit 0
+fi
+
+# Cluster-wide Application list, tab-separated:
+#   project \t namespace/name \t appset-from-ownerRef \t appset-from-label
+if [[ "$ARGS" == *"applications.argoproj.io -A"* ]]; then
+  printf 'default\topenshift-gitops/owned-a\teval-set\t\n'
+  printf 'default\topenshift-gitops/owned-b\teval-set\t\n'
+  printf 'default\topenshift-gitops/labelled\t\tlabel-set\n'
+  printf 'default\topenshift-gitops/solo\t\t\n'
+  printf 'default\tteam-b-gitops/other-instance\t\t\n'
+  printf 'payments\topenshift-gitops/pay\t\t\n'
+  exit 0
+fi
+
+if [[ "$ARGS" == *"rollouts.argoproj.io -A"* ]]; then
+  echo "ns1 r1"; echo "ns2 r2"; exit 0
+fi
+
+if [[ "$ARGS" == *"status.resources"* ]]; then
+  [[ "$ARGS" == *"never-synced"* ]] && exit 0
+  printf '    Deployment/apps/web\n    Service/apps/web\n'; exit 0
+fi
+if [[ "$ARGS" == *"status.sync.status"* ]]; then
+  [[ "$ARGS" == *"never-synced"* ]] && { printf 'Unknown'; exit 0; }
+  printf 'Synced'; exit 0
+fi
+if [[ "$ARGS" == *"syncPolicy.automated.prune"* ]]; then printf 'true'; exit 0; fi
+if [[ "$ARGS" == *"sourceNamespaces"* ]]; then printf ''; exit 0; fi
+if [[ "$ARGS" == *"ownerReferences[0].kind"* ]]; then printf 'GitopsService/cluster'; exit 0; fi
+if [[ "$ARGS" == *"namespaceScoped"* ]]; then printf ''; exit 0; fi
+if [[ "$ARGS" == *"applicationsets.argoproj.io"* && "$ARGS" == *"--no-headers"* ]]; then
+  echo "eval-set"; exit 0
+fi
+exit 0
