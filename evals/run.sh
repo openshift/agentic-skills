@@ -74,7 +74,7 @@ model_env() {
     case "$1" in
         claude)            echo "-e ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}" ;;
         gemini)            echo "-e GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
-        openai)            echo "-e OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.4}" ;;
+        openai)            echo "-e OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.4} -e LIGHTSPEED_MODEL=${OPENAI_MODEL:-gpt-5.4}" ;;
         deepagents-claude) echo "-e DEEPAGENTS_MODEL=${DEEPAGENTS_MODEL:-claude-opus-4-6}" ;;
         deepagents-gemini) echo "-e DEEPAGENTS_MODEL=${DEEPAGENTS_GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
         deepagents-openai) echo "-e DEEPAGENTS_MODEL=${DEEPAGENTS_OPENAI_MODEL:-gpt-5.4}" ;;
@@ -93,6 +93,15 @@ mkdir -p "$SHARED_WORKSPACE/skills"
 if [ -d "$(pwd)/evals/workspace/skills" ]; then
     cp -rL "$(pwd)/evals/workspace/skills/"* "$SHARED_WORKSPACE/skills/"
 fi
+
+# Inject eval test data (mock files) into workspace skill directories
+for skill_eval_dir in "$(pwd)/evals/skills/"*/; do
+    skill_name=$(basename "$skill_eval_dir")
+    testdata_dir="${skill_eval_dir}testdata"
+    if [ -d "$testdata_dir" ] && [ -d "$SHARED_WORKSPACE/skills/$skill_name" ]; then
+        cp -r "$testdata_dir/"* "$SHARED_WORKSPACE/skills/$skill_name/"
+    fi
+done
 
 for i in "${!PROVIDERS[@]}"; do
     name="${PROVIDERS[$i]}"

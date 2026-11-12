@@ -175,3 +175,468 @@
   expected:
     decision: "escalate"
     checks_errored: 7
+
+# ───────────────────────────────────────────────────────────────────────
+# Tests 6–10: Remediation plan and upgrade command verification.
+#
+# These tests embed product-lifecycle olm-check results directly in the
+# query so the agent does not need to call the product-lifecycle skill.
+# They verify that the advisor produces correct remediation plans with
+# concrete oc commands for operator and platform upgrades.
+# ───────────────────────────────────────────────────────────────────────
+
+# Test 6: OLMv0 operator incompatible — upgrade via Subscription patch.
+# cluster-logging v5.9.14 is incompatible with OCP 4.21; source_catalogs
+# offers 6.5.3 (stable-6.5) and 6.6.1 (stable-6.6). Per SKILL.md the
+# target is the lowest compatible non-EOL version → 6.5.3 / stable-6.5.
+# Expected decision: warn (operator can be upgraded, not a blocker)
+- name: advisor_olmv0_upgrade_plan
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"cluster-logging","package":"cluster-logging","namespace":"openshift-logging","channel":"stable-5.9","installed_version":"5.9.14","installed_csv":"cluster-logging.v5.9.14","install_plan_approval":"Automatic","available_channels":["stable-5.9","stable-6.3","stable-6.5","stable-6.6"],"state":"AtLatestKnown"}],"summary":{"total_operators":1,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":1}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv0 '[{"package":"cluster-logging","version":"5.9.14"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target":"4.21","operators_checked":1,"lifecycle_unavailable":[],"results":[{"package":"cluster-logging","requested_version":"5.9","product":"logging for Red Hat OpenShift","status":"End of life","ocp_compatible":false,"ocp_versions":"4.12-4.15","phases":{"general_availability":"2024-05-08","full_support":"2024-11-13","maintenance_support":"2024-11-13","end_of_life":"2025-05-08"},"available_versions":["6.5","6.6"],"source_catalogs":[{"catalog":"redhat-operators","catalog_namespace":"openshift-marketplace","versions":{"6.5.3":{"channels":["stable-6.5"],"bundle":"cluster-logging.v6.5.3"},"6.6.1":{"channels":["stable-6.6"],"bundle":"cluster-logging.v6.6.1"}}}]}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. An incompatible operator with an available upgrade is not a blocker."
+      has_subscription_patch:
+        type: boolean
+        description: "Whether the remediation plan includes an 'oc patch subscriptions.operators.coreos.com' command for the operator upgrade"
+      target_channel:
+        type: string
+        enum: ["stable-6.5", "stable-6.6"]
+        description: "The target channel for the cluster-logging subscription patch (lowest compatible non-EOL version)"
+      platform_update_included:
+        type: boolean
+        description: "Whether the plan includes an 'oc adm upgrade' command for the platform update"
+    required: ["decision", "has_subscription_patch", "target_channel", "platform_update_included"]
+  expected:
+    decision: "warn"
+    has_subscription_patch: true
+    target_channel: "stable-6.5"
+    platform_update_included: true
+
+# Test 7: OLMv1 operator incompatible — upgrade via ClusterExtension patch.
+# serverless-operator v1.36.1 is incompatible; available_versions has 1.37.
+# No source_catalogs (OLMv1 uses available_versions for version range).
+# Expected decision: warn
+- name: advisor_olmv1_upgrade_plan
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"serverless-operator","package":"serverless-operator","installed_version":"1.36.1","state":"Installed"}],"summary":{"total_operators":1,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":1}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv1 '[{"package":"serverless-operator","version":"1.36.1"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target":"4.21","operators_checked":1,"lifecycle_unavailable":[],"results":[{"package":"serverless-operator","requested_version":"1.36","product":"Red Hat OpenShift Serverless","status":"End of life","ocp_compatible":false,"ocp_versions":"4.12-4.17","phases":{"general_availability":"2024-09-10","full_support":"2025-03-10","maintenance_support":"2025-03-10","end_of_life":"2025-09-10"},"available_versions":["1.37"]}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. An incompatible OLMv1 operator with available_versions is not a blocker."
+      has_clusterextension_patch:
+        type: boolean
+        description: "Whether the remediation plan includes an 'oc patch clusterextensions.olm.operatorframework.io' command for the OLMv1 operator upgrade"
+      platform_update_included:
+        type: boolean
+        description: "Whether the plan includes an 'oc adm upgrade' command for the platform update"
+    required: ["decision", "has_clusterextension_patch", "platform_update_included"]
+  expected:
+    decision: "warn"
+    has_clusterextension_patch: true
+    platform_update_included: true
+
+# Test 8: All operators compatible — platform update only, no operator upgrades.
+# gitops v1.21.6 is compatible with OCP 4.21; no operator commands needed.
+# Expected decision: recommend
+- name: advisor_platform_update_only
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"openshift-gitops-operator","package":"openshift-gitops-operator","namespace":"openshift-gitops-operator","channel":"gitops-1.21","installed_version":"1.21.6","installed_csv":"openshift-gitops-operator.v1.21.6","install_plan_approval":"Automatic","available_channels":["gitops-1.21","gitops-1.22"],"state":"AtLatestKnown"}],"summary":{"total_operators":1,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv0 '[{"package":"openshift-gitops-operator","version":"1.21.6"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target":"4.21","operators_checked":1,"lifecycle_unavailable":[],"results":[{"package":"openshift-gitops-operator","requested_version":"1.21","product":"Red Hat OpenShift GitOps","status":"Full Support","ocp_compatible":true,"ocp_versions":"4.17-4.21","phases":{"general_availability":"2025-06-01","full_support":"2026-06-01","maintenance_support":"2026-12-01","end_of_life":"2027-06-01"}}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. All operators are compatible — no blockers or warnings from operators."
+      platform_update_command_included:
+        type: boolean
+        description: "Whether the plan includes an 'oc adm upgrade --to=4.21.16' command"
+      operator_upgrades_needed:
+        type: integer
+        description: "Number of operators that need upgrading before the platform update"
+    required: ["decision", "platform_update_command_included", "operator_upgrades_needed"]
+  expected:
+    decision: "recommend"
+    platform_update_command_included: true
+    operator_upgrades_needed: 0
+
+# Test 9: Mixed OLMv0 + OLMv1 — both need upgrade before platform update.
+# cluster-logging v5.9.14 (OLMv0, incompatible) + serverless v1.36.1 (OLMv1, incompatible).
+# Uses remediationPlan.actions from the real RemediationOption schema to verify
+# that the agent produces concrete oc commands. Verified via _fn (substring checks).
+# Expected decision: warn (both can be upgraded)
+- name: advisor_mixed_operators_plan
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"cluster-logging","package":"cluster-logging","namespace":"openshift-logging","channel":"stable-5.9","installed_version":"5.9.14","installed_csv":"cluster-logging.v5.9.14","install_plan_approval":"Automatic","available_channels":["stable-5.9","stable-6.3","stable-6.5","stable-6.6"],"state":"AtLatestKnown"},{"name":"serverless-operator","package":"serverless-operator","installed_version":"1.36.1","state":"Installed"}],"summary":{"total_operators":2,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":2}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv0 '[{"package":"cluster-logging","version":"5.9.14"}]' --olmv1 '[{"package":"serverless-operator","version":"1.36.1"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target":"4.21","operators_checked":2,"lifecycle_unavailable":[],"results":[{"package":"cluster-logging","requested_version":"5.9","product":"logging for Red Hat OpenShift","status":"End of life","ocp_compatible":false,"ocp_versions":"4.12-4.15","phases":{"general_availability":"2024-05-08","full_support":"2024-11-13","maintenance_support":"2024-11-13","end_of_life":"2025-05-08"},"available_versions":["6.5","6.6"],"source_catalogs":[{"catalog":"redhat-operators","catalog_namespace":"openshift-marketplace","versions":{"6.5.3":{"channels":["stable-6.5"],"bundle":"cluster-logging.v6.5.3"},"6.6.1":{"channels":["stable-6.6"],"bundle":"cluster-logging.v6.6.1"}}}]},{"package":"serverless-operator","requested_version":"1.36","product":"Red Hat OpenShift Serverless","status":"End of life","ocp_compatible":false,"ocp_versions":"4.12-4.17","phases":{"general_availability":"2024-09-10","full_support":"2025-03-10","maintenance_support":"2025-03-10","end_of_life":"2025-09-10"},"available_versions":["1.37"]}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. Both operators can be upgraded — not blockers."
+      remediationPlan:
+        type: object
+        description: "The remediation plan with ordered actions. Use the 'cluster-update-advisor' skill."
+        properties:
+          actions:
+            type: array
+            description: "Ordered list of remediation actions. Each action is one oc command."
+            items:
+              type: object
+              properties:
+                command:
+                  type: string
+                  description: "Exact executable oc command"
+                type:
+                  type: string
+                  enum: ["pre-check", "mutation", "wait", "post-check"]
+                  description: "Action phase category"
+                description:
+                  type: string
+                  description: "What this action does and why"
+              required: ["command", "type", "description"]
+          reversible:
+            type: string
+            enum: ["Reversible", "Irreversible", "Partial"]
+            description: "Whether the plan includes irreversible actions (platform update is irreversible)"
+        required: ["actions", "reversible"]
+    required: ["decision", "remediationPlan"]
+  expected:
+    decision: "warn"
+    _fn: verify_mixed_operators_plan
+
+# Test 10: Incompatible operator with NO upgrade path — blocker.
+# cluster-logging v5.9.14 is incompatible, lifecycle shows no
+# source_catalogs and empty available_versions. No remediation possible.
+# Expected decision: block
+- name: advisor_operator_blocker_no_upgrade
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"cluster-logging","package":"cluster-logging","namespace":"openshift-logging","channel":"stable-5.9","installed_version":"5.9.14","installed_csv":"cluster-logging.v5.9.14","install_plan_approval":"Automatic","available_channels":["stable-5.9"],"state":"AtLatestKnown"}],"summary":{"total_operators":1,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":1}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv0 '[{"package":"cluster-logging","version":"5.9.14"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target":"4.21","operators_checked":1,"lifecycle_unavailable":[],"results":[{"package":"cluster-logging","requested_version":"5.9","product":"logging for Red Hat OpenShift","status":"End of life","ocp_compatible":false,"ocp_versions":"4.12-4.15","phases":{"general_availability":"2024-05-08","full_support":"2024-11-13","maintenance_support":"2024-11-13","end_of_life":"2025-05-08"},"available_versions":[]}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. Incompatible operator with no upgrade path is a blocker."
+      has_remediation_plan:
+        type: boolean
+        description: "Whether the agent produced a remediation plan with upgrade commands (should be false — no viable path)"
+    required: ["decision", "has_remediation_plan"]
+  expected:
+    decision: "block"
+    has_remediation_plan: false
+
+# Test 11: Compatible operators are NOT upgraded even though updates are
+# available — gitops has gitops-1.22 channel, cert-manager has a pending
+# 1.20.0 update in-channel (and is in Maintenance Support → warning).
+# Upgrades are only for operators incompatible with the target.
+# Expected decision: warn (cert-manager Maintenance Support / pending update)
+- name: advisor_compatible_operators_not_updated
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"","last_transition":"2026-05-28T12:06:46Z"}},"recent_history":[{"version":"4.21.5","state":"Completed","startedTime":"2026-05-28T12:06:46Z","completionTime":"2026-05-28T12:36:04Z"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"operator_conditions":{"Available":{"status":"True","reason":"AsExpected","message":"3 members available"},"Degraded":{"status":"False","reason":"AsExpected","message":"No unhealthy members"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"All is well"}},"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","proxy":{"http_proxy":"","https_proxy":"","no_proxy":""},"tls_profile":"Intermediate","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"openshift-gitops-operator","package":"openshift-gitops-operator","namespace":"openshift-gitops-operator","channel":"gitops-1.21","installed_version":"1.21.6","installed_csv":"openshift-gitops-operator.v1.21.6","install_plan_approval":"Automatic","available_channels":["gitops-1.21","gitops-1.22"],"state":"AtLatestKnown"},{"name":"cert-manager","package":"openshift-cert-manager-operator","namespace":"openshift-cert-manager-operator","channel":"stable-v1","installed_version":"1.19.0","installed_csv":"cert-manager.v1.19.0","install_plan_approval":"Automatic","available_channels":["stable-v1"],"state":"UpgradeAvailable"}],"summary":{"total_operators":2,"pending_upgrades":1,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv0 '[{"package":"openshift-gitops-operator","version":"1.21.6"},{"package":"openshift-cert-manager-operator","version":"1.19.0"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target": "4.21", "operators_checked": 2, "lifecycle_unavailable": [], "results": [{"package": "openshift-gitops-operator", "requested_version": "1.21", "product": "Red Hat OpenShift GitOps", "status": "Full Support", "ocp_compatible": true, "ocp_versions": "4.18-4.22", "phases": {"general_availability": "2025-06-01", "full_support": "2026-06-01", "maintenance_support": "2026-12-01", "end_of_life": "2027-06-01"}}, {"package": "openshift-cert-manager-operator", "requested_version": "1.19", "product": "cert-manager operator for Red Hat OpenShift", "status": "Maintenance Support", "ocp_compatible": true, "ocp_versions": "4.19-4.22", "phases": {"general_availability": "2026-04-20", "full_support": "2026-08-02", "maintenance_support": "2026-10-31", "end_of_life": "2028-02-25"}}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. Both operators are compatible with the target \u2014 the pending cert-manager update and its Maintenance Support status are warnings, not blockers."
+      platform_update_command_included:
+        type: boolean
+        description: "Whether the plan includes an 'oc adm upgrade --to=4.21.16' command"
+      operator_upgrades_needed:
+        type: integer
+        description: "Number of operators that need upgrading before the platform update \u2014 must be 0: compatible operators are never upgraded just because newer versions or channels are available."
+      cert_manager_issue_detected:
+        type: boolean
+        description: "Whether a warning was detected for the cert-manager operator (pending update and/or Maintenance Support status)"
+      gitops_subscription_patch:
+        type: boolean
+        description: "Whether the plan patches the gitops Subscription \u2014 must be FALSE: ocp_compatible=true operators get no commands."
+      cert_manager_subscription_patch:
+        type: boolean
+        description: "Whether the plan patches the cert-manager Subscription \u2014 must be FALSE: the pending 1.20.0 update is available in-channel but the installed version is compatible with the target."
+    required: ["decision", "operator_upgrades_needed", "cert_manager_issue_detected", "gitops_subscription_patch", "cert_manager_subscription_patch", "platform_update_command_included"]
+  expected:
+    cert_manager_issue_detected: true
+    cert_manager_subscription_patch: false
+    gitops_subscription_patch: false
+    decision: "warn"
+    platform_update_command_included: true
+    operator_upgrades_needed: 0
+
+# Test 12: Two checks errored (node_capacity, pdb_drain) — both are
+# blocker-level checks per the classification table. Without them the
+# agent cannot rule out blockers → escalate.
+# Expected decision: escalate
+- name: advisor_partial_visibility
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"","last_transition":"2026-05-28T12:06:46Z"}},"recent_history":[{"version":"4.21.5","state":"Completed","startedTime":"2026-05-28T12:06:46Z","completionTime":"2026-05-28T12:36:04Z"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"error","_error":"failed to list nodes: connection refused","_elapsed_seconds":60.0},"pdb_drain":{"_status":"error","_error":"failed to list resources: connection refused","_elapsed_seconds":60.0},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"operator_conditions":{"Available":{"status":"True","reason":"AsExpected","message":"3 members available"},"Degraded":{"status":"False","reason":"AsExpected","message":"No unhealthy members"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"All is well"}},"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","proxy":{"http_proxy":"","https_proxy":"","no_proxy":""},"tls_profile":"Intermediate","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[],"summary":{"total_operators":0,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":0}}},"meta":{"total_checks":9,"checks_ok":7,"checks_errored":2,"elapsed_seconds":2.5}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. Two non-critical checks errored but the cluster is otherwise healthy \u2014 decide whether the visibility gap still allows assessment."
+      checks_errored:
+        type: integer
+        description: "Number of readiness checks that errored"
+    required: ["decision", "checks_errored"]
+  expected:
+    checks_errored: 2
+    decision: "escalate"
+
+# Test 13: OLMv0 in-channel update — subscription already on the channel that
+# carries the target version (6.5.3 in 'stable'), install_plan_approval Manual.
+# No subscription channel patch needed; approve the InstallPlan instead.
+# Verified via _fn (command substring checks + decision + absence of channel patch).
+# Expected decision: warn
+- name: advisor_installplan_approval
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"","last_transition":"2026-05-28T12:06:46Z"}},"recent_history":[{"version":"4.21.5","state":"Completed","startedTime":"2026-05-28T12:06:46Z","completionTime":"2026-05-28T12:36:04Z"}],"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"operator_conditions":{"Available":{"status":"True","reason":"AsExpected","message":"3 members available"},"Degraded":{"status":"False","reason":"AsExpected","message":"No unhealthy members"},"Upgradeable":{"status":"True","reason":"AsExpected","message":"All is well"}},"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","proxy":{"http_proxy":"","https_proxy":"","no_proxy":""},"tls_profile":"Intermediate","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"cluster-logging","package":"cluster-logging","namespace":"openshift-logging","channel":"stable","installed_version":"5.9.14","installed_csv":"cluster-logging.v5.9.14","install_plan_approval":"Manual","available_channels":["stable"],"state":"AtLatestKnown"}],"summary":{"total_operators":1,"pending_upgrades":1,"manual_approval":1,"incompatible_with_target":1}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+
+    ## Product Lifecycle Results
+
+    The following product-lifecycle olm-check output was collected with:
+    `plc_lookup.py olm-check --ocp 4.21 --compatibleonly --olmv0 '[{"package":"cluster-logging","version":"5.9.14"}]'`
+    Use it directly instead of calling the product-lifecycle skill.
+
+    ```json
+    {"ocp_target": "4.21", "operators_checked": 1, "lifecycle_unavailable": [], "results": [{"package": "cluster-logging", "requested_version": "5.9", "product": "logging for Red Hat OpenShift", "status": "End of life", "ocp_compatible": false, "ocp_versions": "4.12-4.15", "available_versions": ["6.5", "6.6"], "source_catalogs": [{"catalog": "redhat-operators", "catalog_namespace": "openshift-marketplace", "versions": {"6.5.3": {"channels": ["stable"], "bundle": "cluster-logging.v6.5.3"}, "6.6.1": {"channels": ["stable"], "bundle": "cluster-logging.v6.6.1"}}}]}]}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. An incompatible operator with an available upgrade is not a blocker."
+      has_subscription_patch:
+        type: boolean
+        description: "Whether the plan patches the Subscription channel \u2014 should be FALSE: the subscription is already on the channel that carries the target version (the version's own channels list is ['stable'], same as the installed channel)"
+      has_installplan_approval:
+        type: boolean
+        description: "Whether the plan includes an 'oc patch installplans.operators.coreos.com' approval command (install_plan_approval is Manual)"
+      platform_update_included:
+        type: boolean
+        description: "Whether the plan includes an 'oc adm upgrade' command"
+      remediationPlan:
+        type: object
+        description: "The remediation plan with ordered actions. Use the 'cluster-update-advisor' skill."
+        properties:
+          actions:
+            type: array
+            description: "Ordered list of remediation actions. Each action is one oc command."
+            items:
+              type: object
+              properties:
+                command:
+                  type: string
+                  description: "Exact executable oc command"
+                type:
+                  type: string
+                  enum: ["pre-check", "mutation", "wait", "post-check"]
+                  description: "Action phase category"
+                description:
+                  type: string
+                  description: "What this action does and why"
+              required: ["command", "type", "description"]
+          reversible:
+            type: string
+            enum: ["Reversible", "Irreversible", "Partial"]
+            description: "Whether the plan includes irreversible actions (platform update is irreversible)"
+        required: ["actions", "reversible"]
+    required: ["decision", "has_subscription_patch", "has_installplan_approval", "platform_update_included", "remediationPlan"]
+  expected:
+    _fn: "verify_installplan_approval"
+
+# Test 14: No embedded Product Lifecycle Results — the agent must consult
+# the product-lifecycle skill itself (mock data files in the skill dir).
+# Expected decision: warn
+- name: advisor_invokes_product_lifecycle
+  query: |
+    Current version: OCP 4.21.5
+    Target version: OCP 4.21.16
+    Channel: stable-4.21
+    Update type: Patch
+    Update path: Recommended
+
+    ## Cluster Readiness Data
+
+    ```json
+    {"current_version":"4.21.5","target_version":"4.21.16","checks":{"cluster_conditions":{"_status":"ok","_elapsed_seconds":0.01,"channel":"stable-4.21","cluster_id":"test-id","conditions":{"Available":{"status":"True","reason":"","message":"Done applying 4.21.5","last_transition":"2026-05-28T12:36:04Z"},"Progressing":{"status":"False","reason":"","message":"Cluster version is 4.21.5","last_transition":"2026-05-28T14:42:57Z"},"Upgradeable":{"status":"True","reason":"AsExpected","message":""}},"summary":{"current_version":"4.21.5","update_in_progress":false,"upgradeable":true},"update_in_progress":false,"upgradeable":{"status":"True","reason":"AsExpected","message":""}},"operator_health":{"_status":"ok","_elapsed_seconds":0.6,"degraded":[],"not_available":[],"not_upgradeable":[],"machine_config_pools":[{"name":"master","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3},{"name":"worker","paused":false,"degraded":false,"updating":false,"machine_count":3,"ready_count":3,"updated_count":3}],"mcp_summary":{"degraded":0,"paused":0,"updating":0},"summary":{"total_operators":34,"degraded_count":0,"not_available_count":0,"not_upgradeable_count":0}},"api_deprecations":{"_status":"ok","_elapsed_seconds":0.01,"blocker_apis":[],"warning_apis":[],"summary":{"blockers":0,"warnings":0,"total":0}},"node_capacity":{"_status":"ok","_elapsed_seconds":0.02,"total_nodes":6,"ready_nodes":6,"unschedulable_nodes":0,"summary":{"total":6,"ready":6,"not_ready":0,"unschedulable":0}},"pdb_drain":{"_status":"ok","_elapsed_seconds":0.01,"total_pdbs":21,"blocking_pdbs":[],"summary":{"total":21,"blocking":0}},"etcd_health":{"_status":"ok","_elapsed_seconds":0.2,"total_members":3,"healthy_members":3,"members":[{"name":"etcd-master-0","node":"master-0","phase":"Running","ready":true},{"name":"etcd-master-1","node":"master-1","phase":"Running","ready":true},{"name":"etcd-master-2","node":"master-2","phase":"Running","ready":true}],"summary":{"operator_available":true,"operator_degraded":false}},"network":{"_status":"ok","_elapsed_seconds":0.4,"network_type":"OVNKubernetes","summary":{"network_type":"OVNKubernetes","is_sdn":false}},"crd_compat":{"_status":"ok","_elapsed_seconds":0.5,"total_crds":160,"version_issues":[],"summary":{"total_crds":160,"version_issues":0}},"olm_operator_lifecycle":{"_status":"ok","_elapsed_seconds":2.0,"operators":[{"name":"cluster-logging","package":"cluster-logging","namespace":"openshift-logging","channel":"stable-5.9","installed_version":"5.9.14","installed_csv":"cluster-logging.v5.9.14","install_plan_approval":"Automatic","available_channels":["stable-5.9","stable-6.3","stable-6.5","stable-6.6"],"state":"AtLatestKnown"}],"summary":{"total_operators":1,"pending_upgrades":0,"manual_approval":0,"incompatible_with_target":1}}},"meta":{"total_checks":9,"checks_ok":9,"checks_errored":0,"elapsed_seconds":2.5}}
+    ```
+  schema:
+    type: object
+    properties:
+      decision:
+        type: string
+        enum: ["recommend", "warn", "block", "escalate"]
+        description: "The upgrade decision. An incompatible operator with an available upgrade is not a blocker. Consult the product-lifecycle skill for lifecycle data \u2014 none is embedded in this request."
+      has_subscription_patch:
+        type: boolean
+        description: "Whether the remediation plan includes an 'oc patch subscriptions.operators.coreos.com' command for the operator upgrade"
+      target_channel:
+        type: string
+        enum: ["stable-6.5", "stable-6.6"]
+        description: "The target channel for the cluster-logging subscription patch (lowest compatible non-EOL version)"
+      platform_update_included:
+        type: boolean
+        description: "Whether the plan includes an 'oc adm upgrade' command for the platform update"
+    required: ["decision", "has_subscription_patch", "target_channel", "platform_update_included"]
+  expected:
+    decision: "warn"
+    has_subscription_patch: true
+    platform_update_included: true
+    target_channel: "stable-6.5"

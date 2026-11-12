@@ -1,191 +1,316 @@
 # product-lifecycle skill eval test cases
 #
-# Each test case exercises the product-lifecycle skill against the
-# Red Hat Product Life Cycle API. Ground truth comes from the live API.
+# Uses mock data (testdata/mock_products.json, testdata/mock_packagemanifests.json)
+# for deterministic results. Mock data was captured from the live PLC API on
+# 2026-11-05 and trimmed to relevant products/versions.
 #
+# Operators are based on a real OCP cluster with both Subscription-managed
+# (OLMv0) and ClusterExtension-managed (OLMv1) operators.
 
-# Test 1: Simulate proposal request with 5 OLM operators.
-# Batch check — 5 operators, count which have lifecycle data, which are compatible.
-# devworkspace-operator is not found, web-terminal version 1.16 is not present, cluster-logging 6.3 is not compatible with OCP 4.21
-- name: plc_proposal_olm_batch_check
+# Test 1: OLMv0 batch check with mix of found/not-found operators
+- name: plc_olmv0_batch_check
   query: |
-    Use the product-lifecycle skill to look up lifecycle data for
-    each of these 5 operators against OCP 4.21:
+    Use the product-lifecycle skill to check lifecycle data for these
+    OLMv0 (Subscription-managed) operators against OCP 4.21:
 
-    - compliance-operator v1.9.0 (channel: stable, package: compliance-operator)
-    - cluster-logging v6.3.1 (channel: stable-6.3, package: cluster-logging)
-    - devworkspace-operator v0.41.0 (channel: fast, package: devworkspace-operator)
-    - openshift-pipelines-operator-rh v1.22.0 (channel: latest, package: openshift-pipelines-operator-rh)
-    - web-terminal v1.16.0 (channel: fast, package: web-terminal)
+    - openshift-gitops-operator v1.21.6
+    - rhacs-operator v4.10.11
+    - grafana-operator v5.21.2
 
-    For each operator, check if the Product Life Cycle API has lifecycle data for the installed version.
-    Report the total checked, the total found in the API, how many whose version is present, how many compatible with OCP 4.21
+    Report how many were checked, how many have lifecycle data in the
+    PLC API, and how many are compatible with OCP 4.21.
   schema:
     type: object
     properties:
-      olm_check_ran:
-        type: boolean
-        description: "Whether OLM operator lifecycle checks were performed using the 'product-lifecycle' skill."
       operators_checked:
         type: integer
-        description: "Total number of operators checked against the Product Life Cycle API"
-      operators_api_tracked_count:
+        description: "Total number of operators checked"
+      operators_found:
         type: integer
-        description: "Number of operators whose package was found in the PLC API, even if the specific version is not tracked (i.e. package exists but version may be missing)"
-      operators_version_tracked_count:
+        description: "Number of operators with lifecycle data in the PLC API (package found, even if version not tracked)"
+      operators_compatible:
         type: integer
-        description: "Number of operators whose specific version is tracked in the PLC API (package found and version matched)"
-      operators_ocp_compatible_count:
-        type: integer
-        description: "Number of operators with ocp_compatible=true for the target OCP version"
-    required: ["olm_check_ran", "operators_checked", "operators_api_tracked_count", "operators_version_tracked_count", "operators_ocp_compatible_count"]
+        description: "Number of operators with ocp_compatible=true for OCP 4.21"
+    required: ["operators_checked", "operators_found", "operators_compatible"]
   expected:
-    _fn: verify_olm_batch_check
+    operators_checked: 3
+    operators_found: 2
+    operators_compatible: 2
 
-# Test 2: Verify cluster-logging v6.5 lifecycle status and OCP 4.21 compat
-# against live API data.
-- name: plc_cluster_logging_supported
-  query: >
-    A cluster upgrade proposal from OCP 4.21.5 to 4.21.16 shows
-    cluster-logging v6.5.1 is installed (package: cluster-logging).
+# Test 2: OLMv1 batch check with incompatible operator
+- name: plc_olmv1_batch_check
+  query: |
+    Use the product-lifecycle skill to check lifecycle data for these
+    OLMv1 (ClusterExtension-managed) operators against OCP 4.21:
 
-    Use the product-lifecycle skill to lookup cluster-logging
-    (package: cluster-logging) and report whether it was found,
-    its lifecycle status, and whether it is compatible with OCP 4.21.
+    - openshift-pipelines-operator-rh v1.22.0
+    - serverless-operator v1.36.1
+    - istio-workspace-operator v0.5.2
 
+    Report how many were checked, how many have lifecycle data,
+    and whether any are incompatible with OCP 4.21.
   schema:
     type: object
     properties:
-      product_found:
+      operators_checked:
+        type: integer
+        description: "Total number of operators checked"
+      operators_found:
+        type: integer
+        description: "Number of operators with lifecycle data in the PLC API"
+      any_incompatible:
         type: boolean
-        description: "Whether cluster-logging was found in the PLC API. Use the 'product-lifecycle' skill."
-      status:
-        type: string
-        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
-        description: "Normalized lifecycle status of the version compatible with OCP 4.21"
+        description: "Whether any operator with lifecycle data is incompatible with OCP 4.21 (ocp_compatible=false)"
+    required: ["operators_checked", "operators_found", "any_incompatible"]
+  expected:
+    operators_checked: 3
+    operators_found: 2
+    any_incompatible: true
+
+# Test 3: Mixed OLMv0 + OLMv1 in one call
+- name: plc_mixed_v0_v1_check
+  query: |
+    Use the product-lifecycle skill to check these operators against OCP 4.21.
+    The first two are Subscription-managed (OLMv0), the third is
+    ClusterExtension-managed (OLMv1):
+
+    - openshift-cert-manager-operator v1.20.0 (OLMv0, Subscription)
+    - openshift-gitops-operator v1.21.6 (OLMv0, Subscription)
+    - openshift-pipelines-operator-rh v1.22.0 (OLMv1, ClusterExtension)
+
+    Report the total operators checked and whether all are compatible
+    with OCP 4.21.
+  schema:
+    type: object
+    properties:
+      operators_checked:
+        type: integer
+        description: "Total number of operators checked"
+      all_compatible:
+        type: boolean
+        description: "Whether all operators have ocp_compatible=true for OCP 4.21"
+    required: ["operators_checked", "all_compatible"]
+  expected:
+    operators_checked: 3
+    all_compatible: true
+
+# Test 4: --compatibleonly upgrade path with source_catalogs
+- name: plc_compatibleonly_upgrade_path
+  query: |
+    The operator cluster-logging v5.9.14 is installed as OLMv0
+    (Subscription-managed) on a cluster targeting OCP 4.21. This version
+    is NOT compatible with OCP 4.21.
+
+    Use the product-lifecycle skill with --compatibleonly to find which
+    compatible versions are available to upgrade to.
+
+    Report whether the current version is compatible, whether an upgrade
+    path exists, and the name of the catalog source providing upgrades.
+  schema:
+    type: object
+    properties:
       ocp_compatible:
         type: boolean
-        description: "Whether the product is compatible with OCP 4.21"
-    required: ["product_found", "status", "ocp_compatible"]
+        description: "Whether the currently installed version (5.9.14) is compatible with OCP 4.21"
+      has_upgrade_path:
+        type: boolean
+        description: "Whether there are compatible versions available to upgrade to in the catalogs"
+      upgrade_catalog:
+        type: string
+        description: "Name of the catalog source providing the upgrade versions"
+    required: ["ocp_compatible", "has_upgrade_path", "upgrade_catalog"]
   expected:
-    _fn: verify_cluster_logging_status
+    ocp_compatible: false
+    has_upgrade_path: true
+    upgrade_catalog: "redhat-operators"
 
-# Test 3: Verify web-terminal OCP 4.21 compatibility against live API.
-# Uses _fn to query the PLC API at test time so the expectation stays
-# correct as new web-terminal versions are published.
-- name: plc_web_terminal_compat_check
-  query: >
-    A cluster running OCP 4.21 has web-terminal v1.16.0 installed
-    (package: web-terminal).
+# Test 5: OLMv0 upgrade path — EOL operator with multiple upgrade channels
+- name: plc_olmv0_upgrade_multi_channel
+  query: |
+    The operator cluster-logging v6.3.0 is installed as OLMv0
+    (Subscription-managed) on a cluster targeting OCP 4.21. This version
+    is end of life and NOT compatible with OCP 4.21.
 
-    Use the product-lifecycle skill to check if web-terminal has a
-    version that is compatible with OCP 4.21 and currently in full support.
+    Use the product-lifecycle skill with --compatibleonly to find which
+    compatible versions are available to upgrade to.
+
+    Report whether the current version is compatible, the lifecycle status
+    of the installed version, and how many upgrade versions are available
+    in the catalogs.
   schema:
     type: object
     properties:
-      product_found:
+      ocp_compatible:
         type: boolean
-        description: "Whether web-terminal was found in the PLC API. Use the 'product-lifecycle' skill."
-      has_supported_version_for_421:
-        type: boolean
-        description: "Whether any web-terminal version is both 'supported' and compatible with OCP 4.21"
-    required: ["product_found", "has_supported_version_for_421"]
-  expected:
-    _fn: verify_web_terminal_compat
-
-# Test 4: compliance-operator — check v1.9 lifecycle status against live API.
-# The PLC API indexes this operator by package name ("compliance-operator")
-# and by product name ("compliance operator"). The agent may use either approach.
-- name: plc_compliance_operator_status
-  query: >
-    The compliance-operator v1.9.0 was found installed (package: compliance-operator)
-    in the cluster.
-
-    Use the product-lifecycle skill to check the lifecycle status of
-    compliance-operator v1.9. Report whether it was found and its current lifecycle
-    status.
-  schema:
-    type: object
-    properties:
-      product_found:
-        type: boolean
-        description: "Whether the PLC API has lifecycle data for this operator. Use the 'product-lifecycle' skill."
-      status:
+        description: "Whether the currently installed version (6.3.0) is compatible with OCP 4.21"
+      installed_status:
         type: string
         enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
-        description: "Normalized lifecycle status of compliance-operator v1.9"
-    required: ["product_found", "status"]
+        description: "Normalized lifecycle status of the installed version 6.3"
+      upgrade_versions_available:
+        type: integer
+        description: "Number of distinct versions available in source_catalogs to upgrade to"
+    required: ["ocp_compatible", "installed_status", "upgrade_versions_available"]
   expected:
-    _fn: verify_compliance_operator_status
+    ocp_compatible: false
+    installed_status: "eol"
+    upgrade_versions_available: 3
 
-# Test 5: OCP platform lifecycle check — verify OCP 4.21 status against live API.
+# Test 6: OLMv1 upgrade path — incompatible operator, lifecycle-only (no catalog data)
+- name: plc_olmv1_upgrade_path
+  query: |
+    The operator serverless-operator v1.36.1 is installed as OLMv1
+    (ClusterExtension-managed) on a cluster targeting OCP 4.21. This
+    version is end of life and NOT compatible with OCP 4.21.
+
+    Use the product-lifecycle skill with --compatibleonly to find
+    compatible versions.
+
+    Report whether the current version is compatible, the lifecycle
+    status, and which compatible versions are available according to
+    the lifecycle data.
+  schema:
+    type: object
+    properties:
+      ocp_compatible:
+        type: boolean
+        description: "Whether the currently installed version (1.36.1) is compatible with OCP 4.21"
+      installed_status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
+        description: "Normalized lifecycle status of the installed version 1.36"
+      compatible_versions:
+        type: array
+        items:
+          type: string
+        description: "List of PLC major.minor versions compatible with OCP 4.21 (from available_versions)"
+    required: ["ocp_compatible", "installed_status", "compatible_versions"]
+  expected:
+    ocp_compatible: false
+    installed_status: "eol"
+    compatible_versions: ["1.37"]
+
+# Test 7: Platform lifecycle lookup using products command
 - name: plc_ocp_platform_status
-  query: >
-    Before upgrading from OCP 4.21.5 to 4.21.16, verify that the
-    target OCP version 4.21 is still in full support.
-
-    Use the product-lifecycle skill to look up "Red Hat OpenShift
-    Container Platform" and check version 4.21's lifecycle status.
+  query: |
+    Use the product-lifecycle skill to look up the lifecycle status of
+    "Red Hat OpenShift Container Platform" version 4.14.
     Report whether it was found and its current lifecycle status.
   schema:
     type: object
     properties:
       product_found:
         type: boolean
-        description: "Whether OCP was found in the PLC API. Use the 'product-lifecycle' skill."
-      status:
-        type: string
-        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
-        description: "Normalized lifecycle status of OCP 4.21"
-    required: ["product_found", "status"]
-  expected:
-    _fn: verify_ocp_platform_status
-
-# Test 6: Older OCP version lifecycle — check OCP 4.14 status against live API.
-- name: plc_ocp_old_version_extended
-  query: >
-    Use the product-lifecycle skill to check the lifecycle status
-    of Red Hat OpenShift Container Platform version 4.14.
-    Report whether it was found and its current lifecycle status.
-  schema:
-    type: object
-    properties:
-      product_found:
-        type: boolean
-        description: "Whether OCP was found in the PLC API. Use the 'product-lifecycle' skill."
+        description: "Whether OCP 4.14 was found in the PLC API"
       status:
         type: string
         enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
         description: "Normalized lifecycle status of OCP 4.14"
     required: ["product_found", "status"]
   expected:
-    _fn: verify_ocp_old_version_status
+    product_found: true
+    status: "extended"
 
-# Test 7: Multiple operators batch check from proposal context.
-# Test with 2 operators known to have lifecycle data (cluster-logging, web-terminal).
-- name: plc_batch_known_operators_only
+# Test 8: Product compatibility check with --ocp
+- name: plc_product_ocp_compat
   query: |
-    Use the product-lifecycle skill to check lifecycle status for these
-    2 operators against OCP 4.21:
+    Use the product-lifecycle skill to check if any version of
+    cluster-logging (product name: "logging for Red Hat OpenShift")
+    is compatible with OCP 4.21 and currently in full support or
+    maintenance support.
 
-    1. cluster-logging (package: cluster-logging)
-    2. web-terminal (package: web-terminal)
-
-    For each operator, look up its lifecycle data. Report whether both
-    were found in the API and whether any of their OCP 4.21-compatible
-    versions are end-of-life.
+    Report whether the product was found and whether any
+    OCP 4.21-compatible version is in full support or maintenance support
+    (not end of life).
   schema:
     type: object
     properties:
-      check_completed:
+      product_found:
         type: boolean
-        description: "Whether OLM operator lifecycle checks completed successfully using the 'product-lifecycle' skill."
-      both_found:
+        description: "Whether the product was found in the PLC API"
+      has_supported_compatible_version:
         type: boolean
-        description: "Whether lifecycle data was found for both operators"
-      any_eol:
-        type: boolean
-        description: "Whether any version of either operator that is compatible with OCP 4.21 is end-of-life"
-    required: ["check_completed", "both_found", "any_eol"]
+        description: "Whether any version compatible with OCP 4.21 is in Full Support or Maintenance Support (not EOL)"
+    required: ["product_found", "has_supported_compatible_version"]
   expected:
-    _fn: verify_batch_known_operators
+    product_found: true
+    has_supported_compatible_version: true
+
+# Test 9: Unknown operator with no PLC data
+- name: plc_unknown_operator
+  query: |
+    Use the product-lifecycle skill to check if istio-workspace-operator
+    v0.5.2 is compatible with OCP 4.21. It is an OLMv1 (ClusterExtension)
+    operator.
+
+    Report whether the product was found in the PLC API.
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether istio-workspace-operator was found in the PLC API"
+    required: ["product_found"]
+  expected:
+    product_found: false
+
+# Test 10: Already-compatible operator under --compatibleonly — no upgrade
+# path is returned for compatible operators.
+- name: plc_compatibleonly_already_compatible
+  query: |
+    The operator openshift-gitops-operator v1.21.6 is installed as OLMv0
+    (Subscription-managed) on a cluster targeting OCP 4.21. This version is
+    believed to be compatible with OCP 4.21.
+
+    Use the product-lifecycle skill with --compatibleonly to verify.
+
+    Report whether the current version is compatible, its lifecycle status,
+    and whether any upgrade is needed.
+  schema:
+    type: object
+    properties:
+      ocp_compatible:
+        type: boolean
+        description: "Whether the currently installed version (1.21.6) is compatible with OCP 4.21"
+      installed_status:
+        type: string
+        enum: ["supported", "maintenance", "extended", "end-of-maintenance", "eol", "unknown"]
+        description: "Normalized lifecycle status of the installed version 1.21"
+      has_upgrade_path:
+        type: boolean
+        description: "Whether an upgrade is needed/indicated by the --compatibleonly output for an already-compatible operator (should be false \u2014 no upgrade data is returned for compatible operators)"
+    required: ["ocp_compatible", "installed_status", "has_upgrade_path"]
+  expected:
+    has_upgrade_path: false
+    installed_status: "supported"
+    ocp_compatible: true
+
+# Test 11: Package found but requested version not tracked — distinct from
+# package-not-found; available_versions lists what the PLC API tracks.
+- name: plc_version_untracked
+  query: |
+    Use the product-lifecycle skill to check lifecycle data for the OLMv0
+    (Subscription-managed) operator openshift-gitops-operator v9.9.0 against
+    OCP 4.21. This version string may not be tracked by the PLC API.
+
+    Report whether the product was found in the PLC API, whether the specific
+    version is tracked, and which versions the PLC API lists as available.
+  schema:
+    type: object
+    properties:
+      product_found:
+        type: boolean
+        description: "Whether the package exists in the PLC API (distinct from a version being untracked)"
+      version_tracked:
+        type: boolean
+        description: "Whether the requested version (9.9) has lifecycle data"
+      available_versions:
+        type: array
+        items:
+          type: string
+        description: "PLC major.minor versions the API lists for this product"
+    required: ["product_found", "version_tracked", "available_versions"]
+  expected:
+    available_versions: ["1.21", "1.22"]
+    product_found: true
+    version_tracked: false

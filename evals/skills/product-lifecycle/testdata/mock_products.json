@@ -1,0 +1,1421 @@
+{
+  "data": [
+    {
+      "uuid": "4921327a-8e93-4c47-b86b-de994fdc3f15",
+      "name": "cert-manager operator for Red Hat OpenShift",
+      "former_names": [],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": ""
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": ""
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Extended update support",
+          "additional_text": ""
+        }
+      ],
+      "versions": [
+        {
+          "name": "1.20",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-07-02T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-07-02T00:00:00.000Z",
+              "end_date": "2026-11-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-11-16T00:00:00.000Z",
+              "end_date": "2027-03-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.19, 4.20, 4.21, 4.22, 5.0",
+          "extra_dependences": [
+            "1.20.3"
+          ]
+        },
+        {
+          "name": "1.19",
+          "type": "Maintenance Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-04-20T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-04-20T00:00:00.000Z",
+              "end_date": "2026-08-02T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-08-03T00:00:00.000Z",
+              "end_date": "2026-10-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "2026-11-01T00:00:00.000Z",
+              "end_date": "2028-02-25T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.18, 4.19, 4.20, 4.21, 4.22",
+          "extra_dependences": [
+            "1.19"
+          ]
+        }
+      ],
+      "footnote": "<p>Upcoming releases</p>\n<ul>\n<li>cert-manager 1.13 (January 02, 2024 - <strong>tenative</strong>)</li>\n</ul>\n",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "3 months",
+      "package": "openshift-cert-manager-operator",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift/#certman",
+      "opl_uuid": "2a2741ba-bb0d-4ff4-a1dc-7293e38ef61b",
+      "product_extra_headers": [
+        "Upstream Version"
+      ],
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "53124791-a08a-4496-8f72-ab8be6b34972",
+      "name": "compliance operator",
+      "former_names": [
+        "Compliance Operator"
+      ],
+      "show_final_minor_release": false,
+      "is_layered_product": false,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": ""
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support ",
+          "additional_text": ""
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support ",
+          "additional_text": ""
+        }
+      ],
+      "versions": [
+        {
+          "name": "1.10",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-09-15T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-09-15T00:00:00.000Z",
+              "end_date": "2026-12-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Rolling",
+          "openshift_compatibility": "4.12, 4.14, 4.16, 4.18, 4.19, 4.20, 4.21, 4.22, 5.0",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.9",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-04-16T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-04-16T00:00:00.000Z",
+              "end_date": "2026-09-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Rolling",
+          "openshift_compatibility": "4.12, 4.14, 4.16, 4.18, 4.19, 4.20, 4.21, 4.22",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "4 months",
+      "package": "compliance-operator",
+      "is_retired": false,
+      "opl_uuid": "da2b7e2d-d9ec-405b-8d37-a4b3b6c898ed",
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "57cc88b0-24b5-461f-9051-9944696cd7a7",
+      "name": "logging for Red Hat OpenShift",
+      "former_names": [
+        "Red Hat OpenShift Logging"
+      ],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": ""
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": ""
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Extended update support",
+          "additional_text": ""
+        }
+      ],
+      "versions": [
+        {
+          "name": "6.6",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-07-14T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-07-14T00:00:00.000Z",
+              "end_date": "2026-12-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2027-01-01T00:00:00.000Z",
+              "end_date": "2027-12-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "2028-01-01T00:00:00.000Z",
+              "end_date": "2029-06-30T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.20, 4.21, 4.22",
+          "extra_dependences": []
+        },
+        {
+          "name": "6.5",
+          "type": "Maintenance Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-04-01T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-04-01T00:00:00.000Z",
+              "end_date": "2026-08-14T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-08-15T00:00:00.000Z",
+              "end_date": "2026-12-17T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.19, 4.20, 4.21, 4.22",
+          "extra_dependences": []
+        },
+        {
+          "name": "6.3",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2025-07-16T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2025-07-16T00:00:00.000Z",
+              "end_date": "2025-12-13T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2025-12-14T00:00:00.000Z",
+              "end_date": "2026-04-01T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.17, 4.18, 4.19, 4.20",
+          "extra_dependences": []
+        },
+        {
+          "name": "5.9",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2024-04-04T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2024-04-04T00:00:00.000Z",
+              "end_date": "2024-10-24T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2024-10-25T00:00:00.000Z",
+              "end_date": "2025-11-03T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.13, 4.14, 4.15, 4.16",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "4 months",
+      "package": "cluster-logging",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift#logging",
+      "opl_uuid": "50ff90f5-aa7f-4039-a79f-7e10d7565ea3",
+      "product_extra_headers": [],
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "e8a69345-eadb-4406-b29d-fcd0b3de4bee",
+      "name": "Red Hat Advanced Cluster Security for Kubernetes",
+      "former_names": [],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": ""
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full Support",
+          "additional_text": ""
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Extended update support Add-on Term 1",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support Term 2",
+          "ptype": "extended",
+          "tooltip": null,
+          "display_name": "Extended update support Add-on Term 2",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support Term 3",
+          "ptype": "extended",
+          "tooltip": null,
+          "display_name": "Extended update support Add-on Term 3",
+          "additional_text": ""
+        }
+      ],
+      "versions": [
+        {
+          "name": "5.0",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-11-05T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-11-05T00:00:00.000Z",
+              "end_date": "2027-11-30T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2027-12-01T00:00:00.000Z",
+              "end_date": "2028-11-30T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 2",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 3",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Aligned",
+          "openshift_compatibility": "4.12, 4.14, 4.16, 4.18, 4.19, 4.20, 4.21, 4.22, 5.0",
+          "extra_dependences": []
+        },
+        {
+          "name": "4.10",
+          "type": "Maintenance Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-03-03T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-03-03T00:00:00.000Z",
+              "end_date": "2026-09-03T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-09-04T00:00:00.000Z",
+              "end_date": "2027-01-04T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 2",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 3",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.12, 4.14, 4.16, 4.17, 4.18, 4.19, 4.20, 4.21",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "4 months",
+      "package": "rhacs-operator",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/rhacs",
+      "opl_uuid": "cfa11051-0a12-4865-b9da-4e80117965c9",
+      "product_extra_headers": [],
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "9bbc4758-50e0-4b73-89dc-2bae80f1d394",
+      "name": "Red Hat OpenShift Container Platform",
+      "former_names": [
+        "OpenShift Container Platform",
+        "OpenShift Container Platform 3",
+        "OpenShift Container Platform 4"
+      ],
+      "show_final_minor_release": false,
+      "is_layered_product": false,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": ""
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": ""
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Extended Update Support Add-On - Term 1",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support Term 2",
+          "ptype": "extended",
+          "tooltip": null,
+          "display_name": "Extended Update Support Add-On - Term 2",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support Term 3",
+          "ptype": "extended",
+          "tooltip": null,
+          "display_name": "Extended Update Support Add-On - Term 3",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended life phase",
+          "ptype": "extended",
+          "tooltip": null,
+          "display_name": "Extended life phase",
+          "additional_text": ""
+        }
+      ],
+      "versions": [
+        {
+          "name": "4.21",
+          "type": "Maintenance Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-02-03T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-02-03T00:00:00.000Z",
+              "end_date": "2026-09-09T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-09-10T00:00:00.000Z",
+              "end_date": "2027-08-03T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 2",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 3",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended life phase",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "N/A",
+          "openshift_compatibility": null,
+          "extra_dependences": []
+        },
+        {
+          "name": "4.14",
+          "type": "Extended Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2023-10-31T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2023-10-31T00:00:00.000Z",
+              "end_date": "2024-05-27T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2024-05-28T00:00:00.000Z",
+              "end_date": "2025-05-01T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "2025-05-02T00:00:00.000Z",
+              "end_date": "2025-10-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 2",
+              "start_date": "2025-11-01T00:00:00.000Z",
+              "end_date": "2026-10-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support Term 3",
+              "start_date": "2026-11-01T00:00:00.000Z",
+              "end_date": "2027-10-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended life phase",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "N/A",
+          "openshift_compatibility": null,
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": false,
+      "show_openshift_compatibility": false,
+      "release_cadence": "4 months ",
+      "package": null,
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift/",
+      "policies": "https://access.redhat.com/site/support/policy/updates/openshift/policies/",
+      "opl_uuid": null,
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "17946557-24b4-4968-8088-8e3cfa183ca6",
+      "name": "Red Hat OpenShift GitOps",
+      "former_names": [],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": null
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": null
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": null
+        }
+      ],
+      "versions": [
+        {
+          "name": "1.22",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-09-30T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-09-30T00:00:00.000Z",
+              "end_date": "2027-01-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2027-02-01T00:00:00.000Z",
+              "end_date": "2027-06-30T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.18, 4.19, 4.20, 4.21, 4.22, 5.0",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.21",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-06-24T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-06-24T00:00:00.000Z",
+              "end_date": "2026-10-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-11-01T00:00:00.000Z",
+              "end_date": "2027-03-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.18, 4.19, 4.20, 4.21, 4.22",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "3 months",
+      "package": "openshift-gitops-operator",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift",
+      "opl_uuid": "91b59eba-2c79-4c95-a01e-5f86ba4945f5",
+      "product_extra_headers": [],
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "6038229e-ddd4-4a9f-8375-079051f0294e",
+      "name": "Red Hat OpenShift Pipelines",
+      "former_names": [],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": null
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": null
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": null
+        }
+      ],
+      "versions": [
+        {
+          "name": "1.22",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-04-27T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-04-27T00:00:00.000Z",
+              "end_date": "2026-08-31T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-09-01T00:00:00.000Z",
+              "end_date": "2026-09-30T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.16, 4.18, 4.19, 4.20, 4.21, 4.22",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.18",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2025-03-17T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2025-03-17T00:00:00.000Z",
+              "end_date": "2025-08-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2025-08-16T00:00:00.000Z",
+              "end_date": "2025-09-25T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "N/A",
+          "openshift_compatibility": "4.18, 4.17, 4.16, 4.15",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.16",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2024-10-09T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2024-10-09T00:00:00.000Z",
+              "end_date": "2025-01-12T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2025-01-13T00:00:00.000Z",
+              "end_date": "2025-03-17T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "N/A",
+          "openshift_compatibility": "4.15, 4.16, 4.17, 4.18",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "Not Specified",
+      "package": "openshift-pipelines-operator-rh",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift#pipelines",
+      "opl_uuid": "29c32e31-be7d-4e87-8d04-2a10965d2b69",
+      "product_extra_headers": [],
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "ffeed954-12a8-4f2d-9d7c-e02748145e91",
+      "name": "Red Hat OpenShift Serverless",
+      "former_names": [],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": null
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": null
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": null
+        }
+      ],
+      "versions": [
+        {
+          "name": "1.37",
+          "type": "Full Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2025-11-24T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2025-11-24T00:00:00.000Z",
+              "end_date": "2026-12-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-12-16T00:00:00.000Z",
+              "end_date": "2027-03-15T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.20, 4.19, 4.18, 4.17, 4.16, 4.21, 4.22, 5.0",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.36",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2025-07-17T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2025-07-17T00:00:00.000Z",
+              "end_date": "2025-12-24T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2025-12-25T00:00:00.000Z",
+              "end_date": "2026-03-24T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.19, 4.18, 4.17, 4.16, 4.15, 4.14",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "3 months",
+      "package": "serverless-operator",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift_operators",
+      "opl_uuid": "1ba84c7a-8278-41c8-b5bd-25c4ec869b77",
+      "product_extra_headers": [],
+      "dataSource": "PLCC"
+    },
+    {
+      "uuid": "10887993-ce02-42ac-a11b-86e83e3d1e22",
+      "name": "web terminal operator",
+      "former_names": [
+        "Red Hat OpenShift Web Terminal Operator",
+        "Web Terminal Operator"
+      ],
+      "show_final_minor_release": false,
+      "is_layered_product": true,
+      "all_phases": [
+        {
+          "name": "General availability",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "General availability",
+          "additional_text": ""
+        },
+        {
+          "name": "Full support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Full support",
+          "additional_text": ""
+        },
+        {
+          "name": "Maintenance support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Maintenance support",
+          "additional_text": ""
+        },
+        {
+          "name": "Extended update support",
+          "ptype": "normal",
+          "tooltip": null,
+          "display_name": "Extended update support",
+          "additional_text": ""
+        }
+      ],
+      "versions": [
+        {
+          "name": "1.16",
+          "type": "Maintenance Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2026-03-17T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2026-03-17T00:00:00.000Z",
+              "end_date": "2026-09-09T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2026-09-10T00:00:00.000Z",
+              "end_date": "2027-08-03T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.21",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.13",
+          "type": "Maintenance Support",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2025-06-02T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2025-06-02T00:00:00.000Z",
+              "end_date": "2025-09-17T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2025-09-18T00:00:00.000Z",
+              "end_date": "2026-08-25T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "2026-08-26T00:00:00.000Z",
+              "end_date": "2028-02-25T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Agnostic",
+          "openshift_compatibility": "4.18",
+          "extra_dependences": []
+        },
+        {
+          "name": "1.12",
+          "type": "End of life",
+          "final_minor_release": null,
+          "additional_text": "",
+          "phases": [
+            {
+              "name": "General availability",
+              "start_date": "N/A",
+              "end_date": "2024-10-01T00:00:00.000Z",
+              "start_date_format": "string",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Full support",
+              "start_date": "2024-10-01T00:00:00.000Z",
+              "end_date": "2025-05-25T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Maintenance support",
+              "start_date": "2025-05-26T00:00:00.000Z",
+              "end_date": "2026-04-01T00:00:00.000Z",
+              "start_date_format": "date",
+              "end_date_format": "date",
+              "additional_text": ""
+            },
+            {
+              "name": "Extended update support",
+              "start_date": "N/A",
+              "end_date": "N/A",
+              "start_date_format": "string",
+              "end_date_format": "string",
+              "additional_text": ""
+            }
+          ],
+          "tier": "Rolling",
+          "openshift_compatibility": "4.17",
+          "extra_dependences": []
+        }
+      ],
+      "footnote": "",
+      "is_operator": true,
+      "show_openshift_compatibility": true,
+      "release_cadence": "Not Specified",
+      "package": "web-terminal",
+      "is_retired": false,
+      "link": "https://access.redhat.com/support/policy/updates/openshift",
+      "opl_uuid": "07dd4a74-105b-42e7-bc1a-12677674a98f",
+      "product_extra_headers": [],
+      "dataSource": "PLCC"
+    }
+  ]
+}
